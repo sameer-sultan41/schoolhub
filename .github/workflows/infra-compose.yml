@@ -306,6 +306,10 @@ jobs:
           sudo apt-get install -y --no-install-recommends shellcheck
           shellcheck --severity=warning infra/scripts/*.sh
 
+      # Drives each script with a fake aws CLI; no AWS access.
+      - name: Script unit tests
+        run: python3 -m unittest discover -s infra/scripts/tests -v
+
       # These scripts run during an incident, half-awake. `set -euo pipefail` is
       # the difference between a restore that stops on an error and one that
       # cheerfully continues past it.

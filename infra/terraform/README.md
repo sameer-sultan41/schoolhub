@@ -40,15 +40,19 @@ create anything.
    carefully, not least.
 6. Apply **staging first**, in full, and leave it running for at least one release
    cycle before pointing anything at production.
-7. Run `postgres/init/01-extensions.sql` and `postgres/init/02-app-role.sql`
-   against the new RDS instance as the master user, through the SSM bastion. **The
-   application role does not exist until you do this, and it is the role RLS binds
-   to.** Terraform deliberately does not create it — see
-   `modules/database/main.tf`.
-8. Verify the tenant boundary before any real data lands:
-   `psql -U schoolhub_app -c "SELECT rolbypassrls FROM pg_roles WHERE rolname = current_user"`
-   must return `f`, and `SELECT tablename, tableowner FROM pg_tables WHERE schemaname='public'`
-   must show `schoolhub_migrator` as the owner of every table.
+7. **Run the `db-bootstrap` task** (`schoolhub-<env>-db-bootstrap`, declared in
+   `envs/*/main.tf`) with admin credentials, after `infra/scripts/bootstrap-secrets.sh
+   --phase post-apply`. It runs `postgres/init/01-extensions.sql` and
+   `postgres/init/02-app-role.sql` against RDS as the master user, from the same
+   files compose runs. **The application role does not exist until you do this,
+   and it is the role RLS binds to.** Terraform deliberately does not create it —
+   see `modules/database/main.tf`. The task must exit 0; its log ends with
+   `Roles ready`. Re-run it after any role-password rotation.
+8. Verify the tenant boundary before any real data lands. The `db-bootstrap`
+   task's exit 0 proves the role half: `02-app-role.sql` raises if `schoolhub_app`
+   or `schoolhub_readonly` is a superuser or has `BYPASSRLS`. The ownership half
+   (`schoolhub_migrator` owns every table in `public`) is checked after the first
+   migrate.
 
 ## Layout
 

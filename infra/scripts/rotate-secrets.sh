@@ -79,6 +79,7 @@ command -v aws >/dev/null 2>&1 || fail "aws CLI not found"
 classify() {
   case "$1" in
     */django/secret-key)  echo "DISRUPTIVE|Logs out every user; invalidates every signed token in flight." ;;
+    */db/*-url)           echo "MANUAL|A URL composed from a role password; rotate the -password secret, re-run db-bootstrap, then rewrite the URL." ;;
     */db/app-*|*/db/*)    echo "COORDINATED|Requires a PgBouncer userlist reload in the same window, or every request fails auth." ;;
     */redis/auth-token)   echo "SAFE|ElastiCache accepts old and new during rotation. Rotate, deploy, then promote." ;;
     */payments/*)         echo "COORDINATED|Provider must support overlapping keys. Confirm before rotating, or in-flight payments fail." ;;
@@ -155,7 +156,7 @@ fi
 # -----------------------------------------------------------------------------
 if [ "${ACTION}" = "rotate" ]; then
   if [ "${risk}" = "MANUAL" ]; then
-    fail "refusing to --rotate ${SECRET_NAME}: a random value would drop every live token; edit the list by hand (infra/runbooks/rotate-website-secrets.md)"
+    fail "refusing to --rotate ${SECRET_NAME}: ${note}"
   fi
   if [ "${risk}" = "DISRUPTIVE" ] || [ "${risk}" = "UNKNOWN" ]; then
     printf '\n  *** %s: %s ***\n\n' "${risk}" "${note}"
