@@ -28,7 +28,20 @@ const LIMIT_BELOW_USAGE = apiError(
   409,
   "limit_below_usage",
   "This limit is below a school's current usage. Send acknowledge_over_usage: true to lower it anyway.",
-  { meta: { over_usage: [{ tenant_id: TENANT_ID, metric: "students", limit: 100, usage: 320 }] } },
+  {
+    meta: {
+      over_usage: [
+        {
+          tenant_id: TENANT_ID,
+          tenant_name: "City School",
+          slug: "city-school",
+          metric: "students",
+          limit: 100,
+          usage: 320,
+        },
+      ],
+    },
+  },
 );
 
 async function lowerStudentsLimitAndSave() {

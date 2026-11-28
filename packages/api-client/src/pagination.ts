@@ -92,6 +92,8 @@ export async function collectPages<TItem>(
 /**
  * Drain a page-number list (DRF's `PageNumberPagination`, which `collectPages` doesn't follow):
  * `page=1, 2, …` until the last page the server reports, bounded by `maxPages` (default 50).
+ * A list longer than `maxPages` pages is truncated there, silently: size `maxPages` and
+ * `page_size` for the list, or use a server-side search instead.
  */
 export async function collectNumberedPages<TItem>(
   client: ApiClient,

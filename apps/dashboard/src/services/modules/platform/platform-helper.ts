@@ -69,11 +69,21 @@ export function readOverUsage(meta: Record<string, unknown>): OverUsage[] {
   if (!Array.isArray(raw)) return [];
   return raw.flatMap((entry: unknown): OverUsage[] => {
     if (typeof entry !== "object" || entry === null) return [];
-    const { tenant_id, metric, limit, usage } = entry as Record<string, unknown>;
+    const { tenant_id, tenant_name, slug, metric, limit, usage } = entry as Record<string, unknown>;
     if (typeof metric !== "string" || typeof limit !== "number" || typeof usage !== "number") {
       return [];
     }
-    return [{ tenant_id: typeof tenant_id === "string" ? tenant_id : "", metric, limit, usage }];
+    const text = (value: unknown) => (typeof value === "string" ? value : "");
+    return [
+      {
+        tenant_id: text(tenant_id),
+        tenant_name: text(tenant_name),
+        slug: text(slug),
+        metric,
+        limit,
+        usage,
+      },
+    ];
   });
 }
 

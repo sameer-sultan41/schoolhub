@@ -1,14 +1,16 @@
 "use client";
 
-import { useQueries } from "@tanstack/react-query";
 import { useLocale, useTranslations } from "next-intl";
 
 import { ResponsiveAlertDialog } from "@/components/responsive-alert-dialog";
 import { useConfirmAction } from "@/hooks/use-confirm-action";
 import { enumLabel } from "@/lib/enum-label";
-import { Services, type OverUsage } from "@/services";
-import { tenantDetailKey } from "./platform-query-keys";
+import type { OverUsage } from "@/services";
 import { usePlatformErrorDescriber } from "./use-platform-error";
+
+/** Schools listed before "and N more": a plan edit can catch many, and the dialog must stay
+ * readable. */
+const LISTED_SCHOOLS = 20;
 
 const METRIC_LABELS: Record<string, string> = {
   students: "usage.metrics.students",
@@ -22,8 +24,8 @@ const METRIC_LABELS: Record<string, string> = {
  * The 409 `limit_below_usage` answered: each breach in `meta.over_usage` (a school whose latest
  * snapshot is over a lowered limit), grouped under the school's name, and a resend of the same
  * change with `acknowledge_over_usage: true`. Cancel keeps the form as it was, unsaved.
- * `meta.over_usage` carries only the school's id, so each name is read through the school's own
- * query (shared with its page); until it loads, or if it can't be read, the id shows.
+ * Each entry names its school (`tenant_name`, `slug`), so no request is made per school; the
+ * first `LISTED_SCHOOLS` are listed, then how many more.
  *
  * Mounting contract: mounted only while a refusal is being answered, so it starts with no error.
  */
@@ -44,13 +46,9 @@ export function AcknowledgeOverUsageDialog<TResult>({
   const locale = useLocale();
   const describeError = usePlatformErrorDescriber();
 
-  const schoolIds = [...new Set(breaches.map((breach) => breach.tenant_id))];
-  const schools = useQueries({
-    queries: schoolIds.map((id) => ({
-      queryKey: tenantDetailKey(id),
-      queryFn: () => Services.platform.fetchTenant(id),
-    })),
-  });
+  const schools = [...new Map(breaches.map((breach) => [breach.tenant_id, breach])).values()];
+  const listed = schools.slice(0, LISTED_SCHOOLS);
+  const unlisted = schools.length - listed.length;
 
   const { error, isPending, confirm } = useConfirmAction({
     mutationFn: resend,
@@ -74,12 +72,12 @@ export function AcknowledgeOverUsageDialog<TResult>({
       onConfirm={confirm}
     >
       <ul className="space-y-2 text-sm">
-        {schoolIds.map((id, index) => (
-          <li key={id}>
-            <p className="font-medium">{schools[index]?.data?.name ?? id}</p>
+        {listed.map((school) => (
+          <li key={school.tenant_id}>
+            <p className="font-medium">{school.tenant_name || school.slug || school.tenant_id}</p>
             <ul className="space-y-1 ps-4">
               {breaches
-                .filter((breach) => breach.tenant_id === id)
+                .filter((breach) => breach.tenant_id === school.tenant_id)
                 .map((breach) => (
                   <li key={breach.metric}>
                     {t("overUsage.breach", {
@@ -92,6 +90,9 @@ export function AcknowledgeOverUsageDialog<TResult>({
             </ul>
           </li>
         ))}
+        {unlisted > 0 && (
+          <li className="text-muted-foreground">{t("overUsage.more", { count: unlisted })}</li>
+        )}
       </ul>
     </ResponsiveAlertDialog>
   );

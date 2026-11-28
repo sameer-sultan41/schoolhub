@@ -153,9 +153,44 @@ describe("AuthService", () => {
       expect(hasPendingMfaChallenge()).toBe(false);
     });
 
+    it("refreshes an expired access token before confirming, since the auth proxy can't", async () => {
+      const { confirmMfa } = await import("../auth-service");
+      const { accessTokenStore } = await import("@/lib/auth");
+      // A long QR step: the password-only access token has lapsed.
+      accessTokenStore.clear();
+      mockRefresh.mockResolvedValueOnce("at-fresh");
+      mockPost.mockResolvedValueOnce({ data: { ...SIGNED_IN, recovery_codes: [] } });
+
+      await confirmMfa("123456");
+
+      expect(mockRefresh).toHaveBeenCalledTimes(1);
+      expect(mockRefresh.mock.invocationCallOrder[0]).toBeLessThan(
+        mockPost.mock.invocationCallOrder[0] ?? 0,
+      );
+    });
+
+    it("ends the session marker on a 401, so Sign in again reaches /login", async () => {
+      const { confirmMfa } = await import("../auth-service");
+      const { accessTokenStore } = await import("@/lib/auth");
+      const { ApiError } = await importApiClient();
+      accessTokenStore.set("at-pwd", 900);
+      document.cookie = "sh_session=1; path=/";
+      mockPost.mockRejectedValueOnce(
+        new ApiError({ code: "unauthenticated", message: "gone", status: 401, url: "/x" }),
+      );
+
+      await expect(confirmMfa("123456")).rejects.toBeInstanceOf(ApiError);
+
+      // The proxy sends a visitor with the marker away from /login, back into the shell.
+      expect(document.cookie).not.toContain("sh_session=1");
+      expect(accessTokenStore.get()).toBeNull();
+    });
+
     it("enrols directly against the API and confirms through the auth proxy", async () => {
       const { confirmMfa, enrollMfa } = await import("../auth-service");
       const { accessTokenStore } = await import("@/lib/auth");
+      // Enrolment runs on the first sign-in's password-only session.
+      accessTokenStore.set("at-pwd", 900);
       mockPost
         .mockResolvedValueOnce({
           data: { secret: "test-secret", otpauth_uri: "otpauth://totp/SchoolHub:ops" },

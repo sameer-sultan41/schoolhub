@@ -140,7 +140,16 @@ describe("the tenant's tabs", () => {
         .mockRejectedValueOnce(
           apiError(409, "limit_below_usage", "Below usage.", {
             meta: {
-              over_usage: [{ tenant_id: TENANT_ID, metric: "students", limit: 100, usage: 320 }],
+              over_usage: [
+                {
+                  tenant_id: TENANT_ID,
+                  tenant_name: "City School",
+                  slug: "city-school",
+                  metric: "students",
+                  limit: 100,
+                  usage: 320,
+                },
+              ],
             },
           }),
         )
@@ -233,7 +242,18 @@ describe("the tenant's tabs", () => {
       platform.changePlan
         .mockRejectedValueOnce(
           apiError(409, "limit_below_usage", "Below usage.", {
-            meta: { over_usage: [{ tenant_id: TENANT_ID, metric: "staff", limit: 10, usage: 42 }] },
+            meta: {
+              over_usage: [
+                {
+                  tenant_id: TENANT_ID,
+                  tenant_name: "City School",
+                  slug: "city-school",
+                  metric: "staff",
+                  limit: 10,
+                  usage: 42,
+                },
+              ],
+            },
           }),
         )
         .mockResolvedValueOnce(subscription("active"));
@@ -249,7 +269,7 @@ describe("the tenant's tabs", () => {
 
       const confirm = await screen.findByRole("alertdialog");
       expect(within(confirm).getByText(/staff: 42 in use, new limit 10/i)).toBeInTheDocument();
-      // `meta.over_usage` carries only the tenant id; the dialog names the school.
+      // Each `meta.over_usage` entry names its school; the dialog shows that name.
       expect(await within(confirm).findByText("City School")).toBeInTheDocument();
       await user.click(within(confirm).getByRole("button", { name: "Save anyway" }));
 
