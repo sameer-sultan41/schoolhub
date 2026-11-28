@@ -1,6 +1,8 @@
 import { ApiError } from "@schoolhub/api-client";
 
-import { reasonText, withReasonText } from "../reason-message";
+import enMessages from "../../../../../messages/en.json";
+
+import { reasonText, refusalReason, withReasonText } from "../reason-message";
 
 jest.mock("@/services", () =>
   jest
@@ -60,5 +62,46 @@ describe("reason messages", () => {
     expect((rewritten as ApiError).meta).toEqual({ reason: "page_in_use" });
     const plain = new Error("boom");
     expect(withReasonText(plain, tReasons)).toBe(plain);
+  });
+
+  it("reads a refusal's meta.reason, and null when it carries none", () => {
+    const refusal = (meta?: Record<string, unknown>) =>
+      new ApiError({
+        code: "conflict",
+        message: "x",
+        status: 409,
+        url: "/api/v1/x",
+        ...(meta ? { meta } : {}),
+      });
+
+    expect(refusalReason(refusal({ reason: "domain_taken" }))).toBe("domain_taken");
+    expect(refusalReason(refusal())).toBeNull();
+    expect(refusalReason(refusal({ reason: 3 }))).toBeNull();
+    expect(refusalReason(new Error("boom"))).toBeNull();
+  });
+
+  it("translates the file and SEO-target refusals from the shipped messages", () => {
+    // `validation.py::_FILE_NOT_AVAILABLE` and `seo/services.py`'s unsupported target.
+    const reasons: unknown = enMessages.website.reasons;
+    const lookup = (key: string): unknown =>
+      key
+        .split(".")
+        .reduce<unknown>(
+          (node, part) =>
+            typeof node === "object" && node !== null
+              ? (node as Record<string, unknown>)[part]
+              : undefined,
+          reasons,
+        );
+    const tShipped = Object.assign((key: string) => String(lookup(key)), {
+      has: (key: string) => typeof lookup(key) === "string",
+    });
+
+    expect(reasonText("file_not_available: this file is not available.", tShipped, "content")).toBe(
+      enMessages.website.reasons.file_not_available,
+    );
+    expect(
+      reasonText("unsupported_target: this target type is not supported.", tShipped, "seo"),
+    ).toBe(enMessages.website.reasons.unsupported_target);
   });
 });

@@ -1,7 +1,7 @@
 # Public School Website Architecture (Website Builder)
 
 > **Agent Context**
-> **Summary:** Technical architecture for the dynamic public school websites (scope §11): one Next.js multi-tenant renderer resolving the tenant from the Host header (wildcard subdomains + verified custom domains with automated TLS); theme system v1 = one theme built from section components + theme tokens driven by tenant branding; page content from `website_pages`/`page_sections` via a read-only machine-token API; ISR with publish-time invalidation; SEO; the future multi-theme model; and the security boundary (renderer never writes — public forms POST to rate-limited API endpoints).
+> **Summary:** Technical architecture for the dynamic public school websites (scope §11): one Next.js multi-tenant renderer resolving the tenant from the Host header (wildcard subdomains + verified custom domains with automated TLS); theme system v1 = one theme built from section components + theme tokens driven by tenant branding; page content from `website_pages`/`page_sections` via a read-only machine-token API keyed by a `host` parameter; ISR with publish-time invalidation; SEO; the future multi-theme model; and the security boundary (renderer never writes — public forms POST to rate-limited API endpoints).
 > **Co-load with:** [`multi-tenancy.md`](multi-tenancy.md) · [`api-architecture.md`](api-architecture.md) · [`../03-modules/website-cms.md`](../03-modules/website-cms.md)
 
 ## 1. One Renderer, Many Sites
@@ -45,9 +45,13 @@ Staff and student data appear on the public site **only** when explicitly marked
 
 ## 3. Data Access & Caching
 
-- The renderer calls the API with a **scoped machine token** limited to `website.public-content.view` — read-only, public-published content only, per [`api-architecture.md`](api-architecture.md) §2.2. Draft pages are visible only through an authenticated preview mode (short-lived signed preview URL from the dashboard).
+- **Machine token.** The renderer calls the API with `Authorization: Bearer <token>`. The token belongs to the platform machine client `website-renderer` and holds one scope, `website.public-content.view`: read-only, public-published content only, per [`api-architecture.md`](api-architecture.md) §2.2 and [ADR-0039](../decisions/0039-public-content-api.md). `WEBSITE_MACHINE_TOKENS` is a comma-separated list, newest first, and every listed token is accepted, so a token rotates with overlap: add the new one first, deploy the renderer with it, then remove the old one. An empty list rejects every token. The token opens nothing under the CMS routes, and a staff JWT opens nothing under `/api/v1/public/`.
+- **Host parameter.** Every read passes `?host=<the request's host>`. The API is the single tenancy resolver: it matches one label under the platform domain, or an active custom domain, and answers 404 for anything else, so the renderer never asserts a tenant id. `GET /api/v1/public/tenants/by-host` is the one read that reports a school that is suspended or whose site is unpublished or in maintenance, so the renderer can show the right notice.
+- **Contract.** The routes, shapes and status codes are in [`../03-modules/website-cms.md`](../03-modules/website-cms.md) §16; the renderer uses the generated types, not hand-written ones. The homepage is read with an empty `slug`, never `slug=home`.
+- **Media.** Content carries `<name>_url` links to `GET /api/v1/public/files/{tenant_id}/{file_id}`, which answers 302 to a presigned link and `Cache-Control: public, max-age=300`. Only a `ready` file marked `public` (referenced by published content) is served; every other case is the same 404. The link is stable, so an optimiser or CDN can cache it.
+- **Preview.** Drafts are visible only through a short-lived signed token issued by the dashboard (`POST …:preview`, 600 s). The renderer's `/api/preview` first calls `GET /public/pages?host=` with the token in the `X-Preview-Token` header (never in a query string); only on a 200 does it enable Next.js draft mode, store the token in an httpOnly, Secure, `SameSite=Lax` cookie with a 600 s lifetime, and redirect to the path the API returned. Draft-mode reads send the cookie's token as the same header with `cache: "no-store"`. The API sends `Vary: X-Preview-Token` and `Cache-Control: no-store` on a preview read.
 - **Rendering strategy: ISR (Incremental Static Regeneration)** per tenant + path (recommendation). Pages render on first request, are cached at the edge, and revalidate on a modest TTL (e.g. 5 minutes) as a safety net.
-- **Publish-time invalidation:** when a tenant publishes CMS changes (or module data that feeds a section changes — a new notice, event, or news post), the API emits a `website.content_published` event; a webhook to the renderer triggers on-demand revalidation for the affected tenant's paths. Result: edits go live in seconds without cold-rendering every request.
+- **Publish-time invalidation.** After a publish, unpublish or settings change commits, the API's Celery task POSTs `{tenant_id, tags}` to the renderer's `/api/revalidate`, signed with HMAC-SHA256 over the raw body (`x-schoolhub-signature`, secret shared through `REVALIDATE_SECRET`). The renderer always drops the tenant-wide `tenant:<id>` tag, which every read carries. Changes to what `by-host` reports (site settings, the module flag, a custom domain) also send `tenant-host:<host>` for every host of the school (its subdomain and active custom domains), so a cached `website_status` never goes stale; the renderer's route must accept those tags. A failure retries with backoff (5 times), and an unset URL is a no-op.
 - Per-tenant cache keys always include the resolved tenant ID — a cache entry can never be served across hosts.
 
 ## 4. SEO
@@ -71,13 +75,15 @@ Designed now, shipped later (scope §11 "WordPress-style" direction):
 The public renderer is treated as a **zero-write, minimum-privilege client**:
 
 - Its machine token cannot write anything and cannot read non-public data; compromise of the renderer exposes only already-public content.
-- **Public forms** (admission enquiry, contact) POST from the browser **directly to public API endpoints** (`POST /api/v1/public/admission-enquiries`, `POST /api/v1/public/contact-messages`) — not through the renderer's token. These endpoints are:
-  - tenant-resolved server-side from the submitted host/tenant slug and re-validated,
-  - aggressively rate-limited per IP and per tenant, with CAPTCHA escalation on abuse (recommendation),
-  - strictly validated and size-limited, feeding the Admissions and Communication modules as leads/messages,
-  - idempotency-protected against duplicate submissions ([`api-architecture.md`](api-architecture.md) §2.5).
-- No authentication cookies exist on public sites; the renderer and dashboard run on separate origins so no session can bleed between them.
-- Uploaded media (gallery images, documents) are served from tenant-prefixed object storage via the CDN with public-read only for explicitly published assets.
+- **Public forms** (contact today; admission enquiry once admissions exists) POST from the browser **directly to public API endpoints** (`POST /api/v1/public/contact-submissions`) — not through the renderer's token. These endpoints are:
+  - tenant-resolved server-side from the `X-Tenant-Slug` header and re-validated against the `Origin` header's host, which must resolve to the same school,
+  - rate-limited per client IP and per school (CAPTCHA escalation on abuse is a recommendation),
+  - strictly validated and size-limited (32 KB JSON body, 413 above, 415 for other content types), with a honeypot field, feeding the school's contact inbox,
+  - idempotency-protected against duplicate submissions ([`api-architecture.md`](api-architecture.md) §2.5); the browser sends a random key per submission.
+- **CORS for public forms.** The API allows a browser origin on `/api/v1/public/` only when its host is the subdomain or an active custom domain of an operational school (resolved from the database, cached 60 s, closed on error), https only outside local development. No other path gains a tenant origin.
+- No authentication cookies exist on public sites; the renderer and dashboard run on separate origins so no session can bleed between them. The one cookie is the preview cookie above: httpOnly, Secure, `SameSite=Lax`, 600 s, carrying only a signed token for one page of one school.
+- Uploaded media (gallery images, documents) stays in the private bucket. Only the redirect route serves a file, and only when published content references it ([ADR-0039](../decisions/0039-public-content-api.md)).
+- Per-IP throttles and stored IPs depend on `NUM_PROXIES` matching the proxy chain in front of the API (production requires it).
 
 ## 7. Request Flow Summary
 

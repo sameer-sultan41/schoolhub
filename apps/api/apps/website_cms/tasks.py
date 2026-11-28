@@ -13,6 +13,7 @@ from uuid import UUID
 from celery import shared_task
 from django.conf import settings
 
+from core.tenancy.maintenance import for_each_tenant
 from core.tenancy.tasks import TenantAwareTask
 
 logger = logging.getLogger(__name__)
@@ -93,3 +94,35 @@ def notify_contact_received(*, tenant_id: str, submission_id: str) -> None:
         submission = rows.filter(pk=submission_id).first()
         if submission is not None and not notifications.already_notified(submission):
             notifications.notify_contact_received(submission)
+
+
+@shared_task(name="website_cms.reverify_custom_domains")
+def reverify_custom_domains() -> dict[str, int]:
+    """Every 15 minutes: re-check each school's custom-domain claims of the last 72 hours.
+
+    Non-atomic per tenant: DNS runs with no transaction open, and each result is written in
+    its own `tenant_atomic` (ADR-0034).
+    """
+    # Imported here: the services import revalidation, which imports this module.
+    from apps.website_cms.custom_domains.services import reverify_tenant_domains
+
+    return for_each_tenant(reverify_tenant_domains, job="website-domain-reverify", atomic=False)
+
+
+@shared_task(name="website_cms.recheck_active_custom_domains")
+def recheck_active_custom_domains() -> dict[str, int]:
+    """Daily: re-check active domains; three definite failures in a row lapse one to `failed`.
+
+    Visits only the schools holding a route (read from the platform-scope route table).
+    """
+    from apps.website_cms.custom_domains.services import (
+        recheck_tenant_active_domains,
+        routed_tenant_ids,
+    )
+
+    return for_each_tenant(
+        recheck_tenant_active_domains,
+        job="website-domain-recheck",
+        atomic=False,
+        tenant_ids=routed_tenant_ids(),
+    )

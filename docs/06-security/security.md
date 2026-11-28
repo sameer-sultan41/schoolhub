@@ -60,6 +60,12 @@
 - Error responses never leak stack traces, SQL, or internal paths (RFC 9457 envelope, api-architecture.md §2.3).
 - `X-Request-ID` on every response for forensic correlation with logs and audit rows.
 - OpenAPI spec reviewed each release for unintentionally unauthenticated endpoints; the endpoint registry drives this check.
+- **The public content API** ([ADR-0039](../decisions/0039-public-content-api.md)):
+  - Every `/api/v1/public/` route is either machine-guarded (scope `website.public-content.view`, tokens rotated with overlap, constant-time compare, per-host throttle) or one of a short anonymous allowlist, enforced by `PublicEndpointContractTests`.
+  - Two anonymous routes exist besides the payment callback: `GET /public/files/{tenant_id}/{file_id}` (302 for a `ready`, `public`, live file of an operational school, an identical 404 for every other case, 120/min per IP and file) and `POST /public/contact-submissions` (see SEC-16). A file's visibility is recomputed from published content, so a draft's media is never served; a link already issued stays valid for up to about 65 minutes after unpublishing.
+  - The preview token travels only in the `X-Preview-Token` header (never a query string, so it stays out of logs and referrers). It is signed, bound to one school and one page, and expires after 600 s. The renderer keeps it in one httpOnly, Secure, `SameSite=Lax` cookie of the same lifetime.
+  - Branding values reach the page as CSS custom properties only after a per-key pattern check, and every link field passes `safe-url`.
+  - CORS: a receiver (`website_cms/cors.py`) allows a school's own origin on `/api/v1/public/` only, resolved from the database, cached 60 s, https only outside `DEBUG`, and closed on any error.
 
 ## SEC-08 Input Validation
 
@@ -126,6 +132,8 @@
 **Implementation:**
 - Redis token-bucket per user and per tenant (api-architecture.md §2.5); stricter buckets on login, reset, and OTP endpoints.
 - **Public forms (admissions, contact, enquiry): CAPTCHA + per-IP and per-tenant throttles + honeypot fields** — these are unauthenticated and internet-facing, and feed staff-visible queues (spam directly costs staff time).
+- **`NUM_PROXIES` is required in production** (`prod.py` refuses to boot without it; Terraform's `num_proxies` input has no default). Per-IP throttles (the public form, the file redirect, login and reset) and the IPs stored on contact submissions and audit rows take the N-th address from the right of `X-Forwarded-For`; an unset or wrong value lets a client rotate the header to escape a limit, or records a proxy's address.
+- The public contact `POST` has a per-IP bucket (5/min), a per-school bucket (200/hour), a 32 KB body cap, a honeypot field and an `Origin` check, all before anything is stored.
 - Notification sends and AI calls capped by per-tenant plan quotas; exports throttled per user.
 - Anomalous usage spikes (per tenant or per IP) alert the platform team (SEC-19); repeat abusers blockable at the edge.
 

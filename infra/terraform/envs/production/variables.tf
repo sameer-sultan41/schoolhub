@@ -10,6 +10,29 @@ variable "platform_domain" {
   default     = "schoolhub.example"
 }
 
+variable "num_proxies" {
+  description = "How many proxies (CDN, ALB) in front of the API append to X-Forwarded-For: 2 when requests pass CloudFront then the ALB, 1 for the ALB alone, 0 when reached directly. Per-IP throttles, audit and contact IPs trust the header only this far, and the API refuses to boot without it."
+  type        = number
+
+  validation {
+    condition     = var.num_proxies >= 0 && floor(var.num_proxies) == var.num_proxies
+    error_message = "num_proxies must be a whole number >= 0."
+  }
+}
+
+variable "website_cname_target" {
+  description = "The hostname a school's custom domain must CNAME to (WEBSITE_CNAME_TARGET): the edge name that serves tenant sites, e.g. sites.<platform_domain>. Custom-domain verification checks for it, and the API refuses to boot without it."
+  type        = string
+
+  validation {
+    condition = (
+      length(var.website_cname_target) <= 253 &&
+      can(regex("^([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\\.)+[a-z]([a-z0-9-]{0,61}[a-z0-9])?$", var.website_cname_target))
+    )
+    error_message = "website_cname_target must be a lowercase fully qualified domain name, e.g. sites.schoolhub.example."
+  }
+}
+
 variable "hosted_zone_id" {
   description = "Route 53 hosted zone ID for platform_domain. Created out of band."
   type        = string

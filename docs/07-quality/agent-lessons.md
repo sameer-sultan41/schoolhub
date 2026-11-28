@@ -408,6 +408,7 @@
 - **Mistake (again, examinations dashboard PR D).** The Results tab (`exams.result.view`) opened a detail sheet that read `GET /marks` (`exams.marks.view`) for every viewer, so a Results viewer without the marks key got a 403 card with a Try again that could never succeed. The sheet now reads marks only for a holder of the key.
 - **Mistake (again, examinations dashboard PR D, Reports).** The Reports section (`exams.result.view`, which every staff role holds) filled its exam picker from `GET /exams` (`exams.exam.view`, which only the exam roles hold), so an accountant or school owner opened the tab, saw "The exams couldn't be loaded." and could run none of the five per-exam reports. The screen now offers the per-exam kinds only to a holder of `exams.exam.view`, makes no `/exams` read otherwise, and says why; a screen test signs in with `exams.result.view` alone.
 - **Mistake (again, examinations dashboard PR D final review).** The Results and Report cards tabs' section filter read `GET /exam-schedules` (`exams.schedule.view`) through `useExamSectionOptions` for every viewer of the tab's own key, and the seeded `e2e-principal` lacked the schedule key, so the live approver's filter read was a 403 nobody asserted; the mocked principal held keys the seed did not (`exams.result.export`). The hook now reads the sittings only for a holder of `exams.schedule.view` and the filter hides otherwise, the seed grants it, and the mocked principal holds exactly the seed's keys.
+- **Mistake (again, website CMS PR H).** Settings, Navigation and SEO were offered on their update keys, but their reads need `website.page.view`, so a custom role with only an update key opened a screen that answered 403. `WebsiteReadGate` now mounts them only with the read key and explains otherwise (`5f736da1`).
 - **Check.** For each key you register, grep `required_permission`, `required_permission_map` and `has_permission_key` for it; a key nothing reads is wired up or dropped, never documented as live. For each read action, confirm its key is a `.view` key the reading roles hold, not a write key it borrowed. On the client, a screen gated on one key that reads an endpoint behind another checks the second key before reading, and its tests sign in with the screen's key alone (a mock that serves every read whatever the keys hides the gap).
 
 ### L56. A read scope and the write gate on the same rows are one predicate, with an agreement test
@@ -434,6 +435,7 @@
 ### L60. A date filter sent as a naive day is a UTC day on the server
 
 - **Mistake.** The Payments tab's paid-on range sent `2026-10-01T00:00:00` and `2026-10-31T23:59:59` to `paid_at__gte` and `__lte`. The server reads a naive date-time in UTC, so a school at UTC+5 lost its first five hours of 1 October to the previous day, and the inclusive upper bound dropped the last second. (`payments-helper.ts`, the fees dashboard PR C.)
+- **Mistake (again, website CMS PR H).** The contact inbox sent its "to" day as 23:59:59.999 local to `created_at__lte` instead of the next midnight to `__lt`; the API gained `created_at__lt` and the inbox now uses `nextLocalDayToIso` (`6ca2dbb3`).
 - **Check.** Every date-range filter on a datetime column sends offset-aware bounds (`new Date(y, m, d).toISOString()` or the tenant's zone) with an exclusive upper bound (the next day's start, `__lt`). Its helper test asserts the exact instants in the zone `jest.global-setup.ts` sets (America/New_York); assigning `process.env.TZ` inside a test does not move the zone.
 
 ### L61. A test's own stub must not run after the helper that overwrites it
@@ -525,6 +527,41 @@
 
 - **Mistake.** Three times in website CMS PR B a value reached something that could not take it: a gallery embed URL over the `varchar(500)` column and one that made `urlsplit` raise (B1, a 500), page rules held only in a serializer so a second caller skipped them (B2), and a contact subject of 200 characters that overflowed `Notification.title` once the notice prefix was added, so the notify task died and nobody was told (change review).
 - **Check.** For every field a caller supplies, name where it ends up (a `max_length` column, `urlsplit`/`UUID`/`json` parsing, an email subject or other header, a title with a prefix) and enforce that limit in the service as a field-keyed `DomainRuleViolation`, so no caller can bypass it. Where text is derived (prefix, truncation), compute the budget from one constant and test the maximum-length input end to end.
+
+### L74. A test that stubs object URLs unmounts before it restores them
+
+- **Mistake.** The SEO share-image test called `restoreUrls()` while the form was still mounted, so `ImageFileField`'s unmount cleanup called a `URL.revokeObjectURL` jsdom does not have, and the suite failed after its last assertion (website CMS PR H, fixed in `f73081a6`).
+- **Check.** In a test that calls `stubObjectUrls`, unmount first (`cleanup()` or the render's `unmount()`), then restore; or restore in an `afterEach` that runs after RTL's own cleanup.
+
+### L75. A dashboard test that renders the shell toolbar mocks `next/navigation`
+
+- **Mistake.** The settings, navigation, domains and read-gate suites rendered screens whose heading is `ToolbarHeading`, which reads `usePathname()`. Without a mock it is null outside the app router, and `use-menu`'s `pathname.startsWith` threw in every test (website CMS PR H, fixed in `26d6a9c5`).
+- **Check.** A suite rendering a screen with `Toolbar`/`ToolbarHeading` has `jest.mock("next/navigation", … createNavigationMock())` and `setUrl(<the screen's path>)` in `beforeEach`, as the news and students suites do.
+
+### L76. A new `Services` domain is added to the services index test's key list
+
+- **Mistake.** Registering `Services.customDomains` failed `services/__tests__/index.test.ts`, whose sorted list of domains is exact (website CMS PR H, fixed in `e88a0f8b`).
+- **Check.** In the commit that registers a domain in `services/index.ts`, add its key to that list and a `typeof … === "function"` line for one of its actions.
+
+### L77. A theme-schema fixture mirrors a shipped theme: a required text has `minLength: 1`
+
+- **Mistake.** A settings test's second theme marked `motto` required with no `minLength`. JSON Schema `required` only demands the key, so `""` is valid on the server and, by design, in `schema-zod.ts`; the test expected "This field is required." that the form could never show (website CMS PR H, fixed in `00cf82b6`).
+- **Check.** A fixture schema copies the keywords of the shipped `themes/default.json` property it stands for; a required text gets `minLength: 1`. Before asserting a client refusal, find the server rule that makes the value invalid.
+
+### L78. `get_throttles` that replaces a bucket returns a new list
+
+- **Mistake.** The preview reads were meant to spend their own `public_preview` bucket instead of the per-host machine quota, but appending to `super().get_throttles()` still spent the machine quota too: DRF calls `allow_request` on every throttle in the list (website CMS PR E review, fixed in `22539083`).
+- **Check.** To replace a bucket, return a list without it (`[PreviewThrottle()]`); to add one, append. Test that a request in the replacing branch leaves the other bucket's cache count unchanged.
+
+### L79. A multi-tenant renderer never uses Next Draft Mode for preview
+
+- **Mistake.** `/api/preview` enabled Draft Mode, whose `__prerender_bypass` cookie is one value for the whole build. Copied to any school's host, it switched every read to uncached renders there and drained that host's machine quota; it cannot be scoped to a tenant (website CMS PR E, fixed in `c2b2835a`). Security-relevant.
+- **Check.** Preview state in the renderer is an app-owned, host-only, httpOnly cookie carrying a token the API verifies for one school, sent only on the reads that need it. Grep `draftMode(` in `apps/website`: it must not appear.
+
+### L80. A throttle keys on `client_ip`, never DRF's `get_ident`
+
+- **Mistake.** The public form throttle used DRF's `get_ident`, which trusts `X-Forwarded-For` unless `NUM_PROXIES` is set, so a client could rotate the header to escape its limit (website CMS PR C, fixed in `07446368`).
+- **Check.** Every throttle and stored IP reads `core.api.client_ip.client_ip`. A throttle test sends two requests with different `X-Forwarded-For` values from one address and expects the second refused, with `NUM_PROXIES` unset and set.
 
 ## 4. Adding a lesson
 

@@ -4,8 +4,11 @@ import { Paths } from "@/config/paths";
 /**
  * The one list of Website sections, in tab order: the tabs, the `/website` landing and the
  * sidebar's children all derive from it (decision 12a). Each section is gated on the key its
- * screen needs, and ships with its screen: news, events and gallery join in PR G; settings,
- * navigation, SEO, domains and the contact inbox in PR H.
+ * screen needs, and ships with its screen. Navigation, settings and SEO are gated on their own
+ * update keys, so a site admin (`it_admin`) reaches them without reading content. Domains open
+ * with either domain key the list reads under (§4 has no view key), so `school_owner` reaches
+ * them; the contact inbox opens with its view key, so `reception` reaches it. The group shows when
+ * any section is visible.
  */
 export const WEBSITE_SECTIONS = [
   {
@@ -37,5 +40,35 @@ export const WEBSITE_SECTIONS = [
     labelKey: "nav.gallery",
     menuTitle: "Gallery",
     permission: "website.page.view",
+  },
+  {
+    href: Paths.WEBSITE_NAVIGATION,
+    labelKey: "nav.navigation",
+    menuTitle: "Navigation",
+    permission: "website.navigation.update",
+  },
+  {
+    href: Paths.WEBSITE_SETTINGS,
+    labelKey: "nav.settings",
+    menuTitle: "Settings",
+    permission: "website.settings.update",
+  },
+  {
+    href: Paths.WEBSITE_SEO,
+    labelKey: "nav.seo",
+    menuTitle: "SEO",
+    permission: "website.seo.update",
+  },
+  {
+    href: Paths.WEBSITE_DOMAINS,
+    labelKey: "nav.domains",
+    menuTitle: "Domains",
+    permission: ["website.custom-domain.create", "website.custom-domain.update"],
+  },
+  {
+    href: Paths.WEBSITE_INBOX,
+    labelKey: "nav.inbox",
+    menuTitle: "Contact inbox",
+    permission: "website.contact-submission.view",
   },
 ] as const satisfies readonly ModuleSection[];

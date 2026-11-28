@@ -6,6 +6,7 @@ import { Button } from "@schoolhub/ui";
 import { ContentDetailSheet, ContentFact } from "@/features/website/shared/content-detail-sheet";
 import { canEditContent, isPublisherOnly } from "@/features/website/shared/content-permissions";
 import { PublishActions } from "@/features/website/shared/publish-actions";
+import { SeoButton } from "@/features/website/seo/seo-button";
 import { EMPTY_VALUE } from "@/lib/constants";
 import { Services } from "@/services";
 import { EVENTS_PATH_PREFIX } from "@/services/modules/website/school-events/school-events-constant";
@@ -25,8 +26,8 @@ export interface EventDetailSheetProps {
 }
 
 /**
- * An event in full, with its actions: Edit and Publish / Unpublish / Archive by its status. An
- * event has no Delete (the API offers none); archiving takes it off the website for good.
+ * An event in full, with its actions: Edit, Publish / Unpublish / Archive by its status, and
+ * SEO. An event has no Delete (the API offers none); archiving takes it off the website for good.
  */
 export function EventDetailSheet({
   eventId,
@@ -93,6 +94,10 @@ export function EventDetailSheet({
               publish={() => Services.schoolEvents.publishSchoolEvent(event.id)}
               unpublish={() => Services.schoolEvents.unpublishSchoolEvent(event.id)}
               archive={() => Services.schoolEvents.archiveSchoolEvent(event.id)}
+            />
+            <SeoButton
+              target={{ targetType: "school_event", targetId: event.id }}
+              title={event.title}
             />
           </>
         )

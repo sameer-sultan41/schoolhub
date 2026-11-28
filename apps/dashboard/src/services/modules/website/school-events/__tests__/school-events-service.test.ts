@@ -56,7 +56,6 @@ describe("school-events-service", () => {
     await service.publishSchoolEvent("e1");
     await service.unpublishSchoolEvent("e1");
     await service.archiveSchoolEvent("e1");
-    await service.deleteSchoolEvent("e1");
 
     expect(mockPost).toHaveBeenCalledWith("/school-events", input);
     expect(mockPatch).toHaveBeenCalledWith("/school-events/e1", { location: "Hall" });
@@ -66,6 +65,7 @@ describe("school-events-service", () => {
       "/school-events/e1:unpublish",
       "/school-events/e1:archive",
     ]);
-    expect(mockDelete).toHaveBeenCalledWith("/school-events/e1");
+    // §4 has no delete key and the API no DELETE route: an event is archived instead.
+    expect(service).not.toHaveProperty("deleteSchoolEvent");
   });
 });

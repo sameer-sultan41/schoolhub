@@ -52,6 +52,11 @@ x-api-env: &api-env
   # Renderer cache invalidation (website_cms): the renderer's internal origin and its shared secret.
   WEBSITE_REVALIDATE_URL: http://website:3001/api/revalidate
   WEBSITE_REVALIDATE_SECRET: ${REVALIDATE_SECRET:-}
+  # The renderer's machine token (core.rbac.machine), the same value the website service reads.
+  WEBSITE_MACHINE_TOKENS: ${PUBLIC_CONTENT_TOKEN:-}
+  # The hostname a school's custom domain must CNAME to. A literal default: the Compose docs
+  # do not promise nested defaults inside a default, so this does not follow PLATFORM_DOMAIN.
+  WEBSITE_CNAME_TARGET: ${WEBSITE_CNAME_TARGET:-sites.localhost}
   LOG_LEVEL: ${LOG_LEVEL:-INFO}
   SENTRY_DSN: ${SENTRY_DSN:-}
   # Overridable per-developer (infra/compose/.env, gitignored) for whoever runs the

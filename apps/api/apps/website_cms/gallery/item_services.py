@@ -15,7 +15,7 @@ from django.db.models import Max
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 
-from apps.website_cms.constants import EMBED_HOSTS, EMBED_URL_MAX_LENGTH
+from apps.website_cms.constants import EMBED_HOSTS, EMBED_URL_MAX_LENGTH, GALLERY_ALBUM_ITEMS_MAX
 from apps.website_cms.content import assert_may_edit, locked
 from apps.website_cms.errors import violation
 from apps.website_cms.models import ContentStatus, GalleryAlbum, GalleryItem, MediaType
@@ -66,7 +66,15 @@ def create_gallery_item(
     with transaction.atomic():
         album = locked(GalleryAlbum, album.pk)
         assert_may_edit(album.status, user, ALBUM_PUBLISH_KEY)
-        top = GalleryItem.objects.alive().filter(gallery_album=album).aggregate(top=Max("position"))
+        live = GalleryItem.objects.alive().filter(gallery_album=album)
+        # The album row is locked, so two adds cannot both pass the cap.
+        if live.count() >= GALLERY_ALBUM_ITEMS_MAX:
+            raise violation(
+                "",
+                "too_many_items",
+                f"an album holds at most {GALLERY_ALBUM_ITEMS_MAX} items.",
+            )
+        top = live.aggregate(top=Max("position"))
         item = GalleryItem(
             tenant=tenant,
             gallery_album=album,

@@ -47,6 +47,7 @@ export * from "./dashboard/timetable/rooms.page";
 export * from "./dashboard/timetable/substitutions.page";
 export * from "./dashboard/timetable/week-grid.page";
 export * from "./dashboard/website/website-pages.page";
+export * from "./dashboard/website/website-site.page";
 export * from "./portal/portal-child.page";
 export * from "./portal/portal-communication.page";
 export * from "./portal/portal-leave.page";

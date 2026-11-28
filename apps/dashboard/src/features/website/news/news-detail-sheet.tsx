@@ -10,6 +10,7 @@ import { NEWS_PATH_PREFIX } from "@/services/modules/website/news-posts/news-pos
 import { ContentDetailSheet, ContentFact } from "@/features/website/shared/content-detail-sheet";
 import { canEditContent, isPublisherOnly } from "@/features/website/shared/content-permissions";
 import { PublishActions } from "@/features/website/shared/publish-actions";
+import { SeoButton } from "@/features/website/seo/seo-button";
 import { useNewsPostDetail } from "./news-form-dialog";
 
 export interface NewsPermissions {
@@ -27,8 +28,8 @@ export interface NewsDetailSheetProps {
 }
 
 /**
- * A news post in full, with its actions: Edit, Publish / Unpublish / Archive by its status, and
- * Delete, which the server allows only once the post is not published (`unpublish_first`), so it
+ * A news post in full, with its actions: Edit, Publish / Unpublish / Archive by its status, SEO,
+ * and Delete, which the server allows only once the post is not published (`unpublish_first`), so it
  * is offered only then. Each action follows its own key.
  */
 export function NewsDetailSheet({
@@ -100,6 +101,7 @@ export function NewsDetailSheet({
               unpublish={() => Services.newsPosts.unpublishNewsPost(post.id)}
               archive={() => Services.newsPosts.archiveNewsPost(post.id)}
             />
+            <SeoButton target={{ targetType: "news_post", targetId: post.id }} title={post.title} />
             {permissions.canDelete && post.status !== "published" && (
               <Button variant="destructive" appearance="light" onClick={onDelete}>
                 {tContent("delete")}

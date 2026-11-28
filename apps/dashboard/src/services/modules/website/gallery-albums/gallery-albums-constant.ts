@@ -1,3 +1,5 @@
+import { MAX_PAGE_SIZE } from "@schoolhub/api-client";
+
 import type { WebsiteContentStatus } from "@/services/shared/website-content";
 import type { GalleryMediaType } from "./gallery-albums-type";
 
@@ -25,6 +27,10 @@ export const GALLERY_ALT_TEXT_MAX = 300;
 /** `website_cms/constants.py::EMBED_URL_MAX_LENGTH`. The allowed video hosts are the server's
  * (`EMBED_HOSTS`), checked there alone so the two lists cannot drift. */
 export const GALLERY_EMBED_URL_MAX = 500;
+
+/** `website_cms/constants.py::GALLERY_ALBUM_ITEMS_MAX`: the server refuses more (`too_many_items`),
+ * and the album page reads every item in one page of this size. */
+export const GALLERY_ALBUM_ITEMS_MAX = MAX_PAGE_SIZE;
 
 export const GALLERY_MEDIA_IMAGE: GalleryMediaType = "image";
 export const GALLERY_MEDIA_VIDEO: GalleryMediaType = "video_embed";

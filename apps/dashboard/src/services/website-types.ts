@@ -7,6 +7,14 @@ export type {
   ContactSubmissionStatus,
 } from "./modules/website/contact-submissions";
 export type {
+  CustomDomainErrorCode,
+  CustomDomainInput,
+  CustomDomainRecord,
+  CustomDomainStatus,
+  CustomDomainTlsStatus,
+  DnsRecord,
+} from "./modules/website/custom-domains";
+export type {
   GalleryAlbumInput,
   GalleryAlbumQuery,
   GalleryAlbumRecord,

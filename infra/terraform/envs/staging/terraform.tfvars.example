@@ -15,6 +15,16 @@ aws_region = "us-east-1"
 # Source: whatever you registered; must match the hosted zone below.
 platform_domain = "staging.schoolhub.example"
 
+# Proxies in front of the API that append to X-Forwarded-For (CloudFront + ALB = 2,
+# ALB only = 1, direct = 0). Wrong values make per-IP throttles and stored IPs
+# spoofable or wrong; the API refuses to boot without it. 2 is safe only once the ALB
+# accepts traffic from CloudFront alone (launch blocker, docs/deferred-work.md).
+num_proxies = 2
+
+# The hostname schools' custom domains CNAME to (the edge serving tenant sites). Changing
+# it later lapses every active domain unless the old name keeps resolving (module doc §20).
+website_cname_target = "sites.staging.schoolhub.example"
+
 # Route 53 hosted zone ID for platform_domain.
 # Source: `aws route53 list-hosted-zones-by-name --dns-name staging.schoolhub.example`
 # Created out of band — Terraform does not manage the zone, because recreating a

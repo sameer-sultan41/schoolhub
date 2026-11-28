@@ -1,7 +1,6 @@
 import {
   archiveSchoolEvent,
   createSchoolEvent,
-  deleteSchoolEvent,
   fetchSchoolEvent,
   fetchSchoolEventPage,
   publishSchoolEvent,
@@ -14,7 +13,6 @@ export const SchoolEventsService = {
   fetchSchoolEvent,
   createSchoolEvent,
   updateSchoolEvent,
-  deleteSchoolEvent,
   publishSchoolEvent,
   unpublishSchoolEvent,
   archiveSchoolEvent,

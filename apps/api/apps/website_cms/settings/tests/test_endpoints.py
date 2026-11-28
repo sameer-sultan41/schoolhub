@@ -10,8 +10,9 @@ from django.test.utils import CaptureQueriesContext
 from rest_framework.test import APIClient
 from rest_framework_simplejwt.tokens import AccessToken
 
-from apps.website_cms.models import Theme, WebsitePage, WebsiteSettings
+from apps.website_cms.models import CustomDomainStatus, Theme, WebsitePage, WebsiteSettings
 from apps.website_cms.tests.base import WebsiteAPITestCase
+from apps.website_cms.tests.factories import make_custom_domain
 from core.tenancy.context import tenant_context
 
 URL = "/api/v1/website-settings"
@@ -79,6 +80,20 @@ class WebsiteSettingsUpdateTests(WebsiteAPITestCase):
             self._patch({"is_published": True})
         task.delay.assert_called_once_with(
             str(self.tenant.id), [f"tenant-host:{self.tenant.slug}.schools.test"]
+        )
+
+    @override_settings(PLATFORM_DOMAIN="schools.test")
+    def test_publishing_tags_every_host_including_active_custom_domains(self) -> None:
+        self.allow("website.settings.update")
+        make_custom_domain(self.tenant, "www.example-school.org", CustomDomainStatus.ACTIVE)
+        with (
+            mock.patch("apps.website_cms.revalidation.revalidate_website") as task,
+            self.captureOnCommitCallbacks(execute=True),
+        ):
+            self._patch({"is_published": True})
+        task.delay.assert_called_once_with(
+            str(self.tenant.id),
+            [f"tenant-host:{self.tenant.slug}.schools.test", "tenant-host:www.example-school.org"],
         )
 
     def test_unchanged_patch_queues_nothing(self) -> None:

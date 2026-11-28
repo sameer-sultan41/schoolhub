@@ -4,7 +4,7 @@ import type { ApiSchemas } from "@schoolhub/api-client";
 export type ContactSubmissionRecord = ApiSchemas["ContactSubmission"];
 export type ContactSubmissionStatus = ApiSchemas["ContactSubmissionStatusEnum"];
 
-/** `createdFrom`/`createdTo` are ISO date-times bounding `created_at`. */
+/** `createdFrom` (inclusive) and `createdBefore` (exclusive) are ISO date-times bounding `created_at`. */
 export interface ContactSubmissionQuery {
   page?: number;
   pageSize?: number;
@@ -12,5 +12,5 @@ export interface ContactSubmissionQuery {
   ordering?: string;
   status?: ContactSubmissionStatus;
   createdFrom?: string;
-  createdTo?: string;
+  createdBefore?: string;
 }
