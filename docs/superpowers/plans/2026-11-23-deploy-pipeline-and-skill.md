@@ -1478,6 +1478,12 @@ What was built differs from the task text above in these places (stop rule 3: th
 - **`check_migrations.py` stays one file at about 430 lines** after the SQL and AST helpers moved out: what remains is the classification of one migration, the git reads and the CLI, which change together (a new rule touches classification and its tests, never git or the CLI). A further split would only move `Finding` and the operation tables away from the code that uses them.
 - **Task 6, plan errors** print only the `Error:` lines, not `-A3` context, which can echo tfvars values.
 
+**CI fix rounds (first CI run of the new tests)**
+- `terraform test` runs use `command = apply` (mocked providers, nothing reaches AWS) except the two `expect_failures` variable runs: under Terraform 1.13.3 a mocked resource's computed values stayed unknown at plan despite `override_during = plan`, so plan-time assertions could not be evaluated.
+- The env and cdn tests give `modules/cdn`'s certificate fixed `domain_validation_options` with `override_resource { override_during = plan }`, because its Route 53 `for_each` needs them at plan; and they mock `aws_iam_policy_document.json` as valid JSON, because the provider validates policies even under a mock.
+- Each ECR repository also sets `image_scanning_configuration { scan_on_push = true }` (trivy AWS-0030). The registry-level configuration still governs once applied; the repository flag is the same setting stated per repository, not a suppression.
+- The bootstrap-secrets fake `aws` parses global options (`--region`, `--profile`) before the service name, as the real CLI does.
+
 ## Independent review
 
 - **Reviewer:** plan-reviewer agent, 2026-11-28 (third pass)
