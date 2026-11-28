@@ -151,6 +151,9 @@ export function MfaEnrollForm() {
   return (
     <ScanAndConfirm
       enrolment={enrolment}
+      // `:confirm` goes through the auth proxy, which never refreshes: a 401 means the
+      // password-only session ran out while the QR code was up.
+      sessionEnded={confirm.error instanceof ApiError && confirm.error.isUnauthenticated}
       isPending={confirm.isPending}
       error={
         confirm.isError
@@ -166,11 +169,13 @@ export function MfaEnrollForm() {
 
 function ScanAndConfirm({
   enrolment,
+  sessionEnded,
   isPending,
   error,
   onSubmit,
 }: {
   enrolment: MfaEnrollResponse;
+  sessionEnded: boolean;
   isPending: boolean;
   error: string | null;
   onSubmit: (values: MfaCodeValues) => void;
@@ -212,6 +217,14 @@ function ScanAndConfirm({
         <Alert variant="destructive">
           <AlertDescription>{error}</AlertDescription>
         </Alert>
+      )}
+      {sessionEnded && (
+        <Link
+          href={Paths.LOGIN}
+          className="text-sm text-primary underline-offset-4 hover:underline"
+        >
+          {t("signInAgain")}
+        </Link>
       )}
       <Form {...form}>
         <form

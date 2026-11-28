@@ -5152,7 +5152,7 @@
       "canceled": "منسوخ"
     },
     "errors": {
-      "toggleRefused": "{flag} اس اسکول کے لیے تبدیل نہیں ہو سکتا: {reason}",
+      "toggleRefused": "{flag} اس اسکول کے لیے ابھی تبدیل نہیں ہو سکتا، کیونکہ اسکول کو ابھی اس کی ضرورت ہے یا یہ کِل سوئچ ہے۔",
       "limitBelowUsage": "{count, plural, one {# اسکول} other {# اسکول}} پہلے ہی اس کم کی گئی حد سے زیادہ استعمال کر رہے ہیں۔"
     },
     "validation": {

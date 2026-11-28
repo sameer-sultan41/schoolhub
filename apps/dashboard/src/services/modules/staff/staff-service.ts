@@ -1,5 +1,4 @@
-import { fetchPage, type Page } from "@schoolhub/api-client";
-import { isOffsetPagination } from "@schoolhub/types";
+import { collectNumberedPages, fetchPage, type Page } from "@schoolhub/api-client";
 import { apiClient } from "@/lib/auth";
 import { endpoints } from "@/services/endpoints";
 import type { JobAccepted } from "@/services/modules/jobs/jobs-service";
@@ -60,27 +59,18 @@ export async function fetchStaffPage(
 }
 
 /**
- * Every active teaching staff member, for a teacher picker. `/staff` is page-number paginated
- * (which `collectPages` does not follow), so this walks the pages by number until the last
- * one the server reports, bounded by `STAFF_OPTIONS_MAX_PAGES`.
+ * Every active teaching staff member, for a teacher picker. `/staff` is page-number paginated,
+ * so this drains it with `collectNumberedPages`, bounded by `STAFF_OPTIONS_MAX_PAGES`.
  */
 export async function fetchTeachingStaffOptions(): Promise<StaffDirectoryRecord[]> {
-  const query = toStaffQueryParams({
-    staffType: "teaching",
-    employmentStatus: "active",
-    pageSize: MAX_PAGE_SIZE,
+  return collectNumberedPages<StaffDirectoryRecord>(apiClient, endpoints.dashboard.staff, {
+    query: toStaffQueryParams({
+      staffType: "teaching",
+      employmentStatus: "active",
+      pageSize: MAX_PAGE_SIZE,
+    }),
+    maxPages: STAFF_OPTIONS_MAX_PAGES,
   });
-  const teachers: StaffDirectoryRecord[] = [];
-  for (let page = 1; page <= STAFF_OPTIONS_MAX_PAGES; page += 1) {
-    const { items, pagination } = await fetchPage<StaffDirectoryRecord>(
-      apiClient,
-      endpoints.dashboard.staff,
-      { query: { ...query, page } },
-    );
-    teachers.push(...items);
-    if (!pagination || !isOffsetPagination(pagination) || page >= pagination.total_pages) break;
-  }
-  return teachers;
 }
 
 /**
