@@ -211,3 +211,6 @@ jobs:
           API_PUBLIC_URL: https://api.example.com
           WEBSITE_CNAME_TARGET: sites.example.com
           NUM_PROXIES: "1"
+          REDIS_HOST: redis.example.com
+          REDIS_PORT: "6379"
+          REDIS_AUTH_TOKEN: placeholder-not-a-secret
