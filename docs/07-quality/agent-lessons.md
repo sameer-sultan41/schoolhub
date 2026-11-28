@@ -585,10 +585,11 @@
 - **Mistake.** Platform-admin PR D's export panel (`tenant-export-panel.tsx`) kept one key for the dialog's life. `:export` runs under `run_idempotent`, which replays a key's first 202, so after the job failed, "Export first" got the failed job back and the operator was stuck until they reopened Delete (review, Important 1).
 - **Check.** For any `Idempotency-Key` held across clicks, ask what the server replays for it. Mint a new key once the attempt it covered has ended, in success or in a failed job, and pin it with a test that the retry's key differs.
 
-### L82. A `next` target is safe only if it resolves to your own origin
+### L82. A redirect target is safe only if the value you return resolves to your own origin
 
 - **Mistake.** PR D carried the login's `next?.startsWith("/")` check into the MFA step. `//evil.example` and `/\evil.example` both pass it, and a browser reads them as another host, so a phishing `next` survived password and TOTP (review, Important 2).
-- **Check.** Pass every redirect target through `safeNextPath` (`apps/dashboard/src/lib/safe-next-path.ts`), which resolves it against a sentinel origin with the URL parser and requires the origin unchanged. Never hand-write a `startsWith("/")` check.
+- **Recurred.** The first `safeNextPath` checked the origin of the parsed input, then returned the normalised path. Dot segments (`/..//evil.example`, `/%2e%2e//evil.example`, `/x/../\evil.example`) keep the sentinel origin yet normalise to `//evil.example`, a 307 off-site from the proxy (final review, Critical).
+- **Check.** Pass every redirect target through `safeNextPath` (`apps/dashboard/src/lib/safe-next-path.ts`) and never hand-write a `startsWith("/")` check. When writing such a check, validate the value you return, not the value you parsed: here, the returned path must not start with `//`, and the tests carry each dot-segment form.
 
 ## 4. Adding a lesson
 
