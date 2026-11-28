@@ -49,6 +49,13 @@ export interface TenantSummary {
   slug: string;
 }
 
+/** An impersonated session's operator and end (the generated `ImpersonationSummary`). */
+export interface ImpersonationSummary {
+  by_name: string;
+  /** ISO 8601: the grant's end, after which every request is 401 `impersonation_ended`. */
+  expires_at: string;
+}
+
 export interface AuthenticatedUser {
   id: string;
   email: string | null;
@@ -67,6 +74,9 @@ export interface AuthenticatedUser {
   is_restricted_principal?: boolean;
   /** Set when a platform support user is impersonating this account. */
   impersonated_by?: string | null;
+  /** Who is acting as this user and until when (`/auth/me`'s generated `ImpersonationSummary`,
+   * ADR-0037); null for a normal session. The dashboard's impersonation banner shows it. */
+  impersonation?: ImpersonationSummary | null;
   /** A platform-scope operator, with no school (the generated `User` schema's field; optional
    * here for the same reason as `is_restricted_principal`). Routes them to the console. */
   is_platform?: boolean;

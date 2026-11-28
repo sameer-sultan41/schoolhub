@@ -96,7 +96,13 @@ export const Paths = {
   FORGOT_PASSWORD: "/forgot-password",
   RESET_PASSWORD: "/reset-password",
   ACCEPT_INVITE: "/accept-invite",
+  /** The impersonation handoff (ADR-0037): the console's link opens it on the school's host with
+   * a single-use code in the fragment. Public to the proxy, never redirected. */
+  IMPERSONATE: "/impersonate",
 } as const;
+
+/** Where an impersonated tab lands once its session is over: ended, released or expired. */
+export const impersonationEndedPath = () => `${Paths.IMPERSONATE}?ended=1`;
 
 /** The second-factor page, carrying a same-origin `next` through (never an off-site one). */
 export const mfaVerifyPath = (next?: string | null) =>

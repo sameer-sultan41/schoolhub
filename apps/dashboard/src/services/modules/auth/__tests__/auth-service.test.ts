@@ -372,4 +372,88 @@ describe("AuthService", () => {
       );
     });
   });
+
+  describe("impersonation (ADR-0037)", () => {
+    afterEach(() => {
+      window.sessionStorage.clear();
+    });
+
+    it("exchanges the handoff code straight with the API and makes its token the session", async () => {
+      const { exchangeImpersonationCode } = await import("../auth-service");
+      const { accessTokenStore, isImpersonating } = await import("@/lib/auth");
+      const { impersonationToken, schoolToken } = await import("@/test-fixtures/impersonation");
+      // Whatever this tab held before is replaced, never mixed with the new session.
+      accessTokenStore.set(schoolToken(), 900);
+      mockPost.mockResolvedValueOnce({ data: { access: impersonationToken(), expires_in: 1800 } });
+
+      await exchangeImpersonationCode("handoff-code");
+
+      expect(mockPost).toHaveBeenCalledWith(
+        "/auth/impersonation:exchange",
+        { code: "handoff-code" },
+        expect.objectContaining({ skipAuthRefresh: true }),
+      );
+      expect(accessTokenStore.get()).toBe(impersonationToken());
+      expect(isImpersonating()).toBe(true);
+      expect(document.cookie).toContain("sh_session=1");
+    });
+
+    it("a refused code leaves no session behind", async () => {
+      const { exchangeImpersonationCode } = await import("../auth-service");
+      const { accessTokenStore } = await import("@/lib/auth");
+      const { schoolToken } = await import("@/test-fixtures/impersonation");
+      const { ApiError } = await importApiClient();
+      accessTokenStore.set(schoolToken(), 900);
+      const refused = new ApiError({
+        code: "invalid_link",
+        message: "This link is no longer valid.",
+        status: 400,
+        url: "/auth/impersonation:exchange",
+      });
+      mockPost.mockRejectedValueOnce(refused);
+
+      await expect(exchangeImpersonationCode("spent")).rejects.toBe(refused);
+      expect(accessTokenStore.get()).toBeNull();
+    });
+
+    it("ending releases the grant and drops the session, even when the grant already ended", async () => {
+      const { endImpersonation } = await import("../auth-service");
+      const { accessTokenStore, isImpersonating, startImpersonatedSession } =
+        await import("@/lib/auth");
+      const { impersonationToken } = await import("@/test-fixtures/impersonation");
+      const { ApiError } = await importApiClient();
+      startImpersonatedSession(impersonationToken(), 1800);
+      mockPost.mockRejectedValueOnce(
+        new ApiError({ code: "impersonation_ended", message: "ended", status: 401, url: "/x" }),
+      );
+
+      await expect(endImpersonation()).resolves.toBeUndefined();
+
+      expect(mockPost).toHaveBeenCalledWith(
+        "/auth/impersonation:end",
+        undefined,
+        expect.objectContaining({ skipAuthRefresh: true }),
+      );
+      expect(accessTokenStore.get()).toBeNull();
+      expect(isImpersonating()).toBe(false);
+      expect(document.cookie).not.toContain("sh_session=1");
+    });
+
+    it("signing out of an impersonated session ends the grant, never the browser's own cookie", async () => {
+      const { logout } = await import("../auth-service");
+      const { startImpersonatedSession } = await import("@/lib/auth");
+      const { impersonationToken } = await import("@/test-fixtures/impersonation");
+      startImpersonatedSession(impersonationToken(), 1800);
+      mockPost.mockResolvedValueOnce({ data: undefined });
+
+      await logout();
+
+      expect(mockPost).toHaveBeenCalledTimes(1);
+      expect(mockPost).toHaveBeenCalledWith(
+        "/auth/impersonation:end",
+        undefined,
+        expect.objectContaining({ skipAuthRefresh: true }),
+      );
+    });
+  });
 });

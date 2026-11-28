@@ -55,6 +55,26 @@ export function clearSessionCookie(): void {
 
 export const accessTokenStore = createAccessTokenStore();
 
+/** RED stub (Task 11): replaced by the implementation. */
+export function isImpersonationToken(token: string | null): boolean {
+  return token === "";
+}
+
+/** RED stub (Task 11): replaced by the implementation. */
+export function isImpersonating(): boolean {
+  return false;
+}
+
+/** RED stub (Task 11): replaced by the implementation. */
+export function startImpersonatedSession(access: string, expiresInSeconds: number): void {
+  accessTokenStore.set(access, expiresInSeconds);
+}
+
+/** RED stub (Task 11): replaced by the implementation. */
+export function endImpersonatedSession(): void {
+  accessTokenStore.clear();
+}
+
 /**
  * The second factor's pending challenge: `/auth/login`'s signed `mfa_token`, held in memory like
  * the access token (never storage a script can read) until `/auth/mfa:verify` spends it. A reload

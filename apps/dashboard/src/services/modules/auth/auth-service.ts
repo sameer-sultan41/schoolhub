@@ -5,6 +5,7 @@ import {
   apiClient,
   authProxyClient,
   clearSessionCookie,
+  endImpersonatedSession,
   mfaChallengeStore,
   setSessionCookie,
 } from "@/lib/auth";
@@ -221,4 +222,19 @@ export async function requestPasswordReset(body: PasswordResetRequest): Promise<
 /** Sets the new password from a reset link and signs out every device; `204`. */
 export async function confirmPasswordReset(body: PasswordResetConfirm): Promise<void> {
   await apiClient.post(endpoints.auth.passwordResetConfirm, body, LINK_REQUEST);
+}
+
+/** RED stub (Task 11): replaced by the implementation. */
+export async function exchangeImpersonationCode(code: string): Promise<void> {
+  await apiClient.post(endpoints.auth.impersonationExchange, { code }, LINK_REQUEST);
+}
+
+/** RED stub (Task 11): replaced by the implementation. */
+export async function endImpersonation(): Promise<void> {
+  await Promise.resolve();
+}
+
+/** RED stub (Task 11): replaced by the implementation. */
+export function forgetImpersonation(): void {
+  endImpersonatedSession();
 }

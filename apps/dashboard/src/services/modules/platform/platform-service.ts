@@ -11,6 +11,8 @@ import type {
   FeatureFlagUpdateInput,
   FeatureOverrideInput,
   FeatureOverrideRecord,
+  GrantStarted,
+  ImpersonateInput,
   PlanInput,
   PlanPageQuery,
   PlanRecord,
@@ -29,6 +31,8 @@ import type {
   TenantRecord,
   TenantUpdateInput,
   TenantUsage,
+  TenantUser,
+  TenantUserQuery,
 } from "./platform-type";
 
 /**
@@ -123,6 +127,27 @@ export async function refreshTenantUsage(id: string): Promise<TenantUsage> {
   const { data } = await apiClient.post<TenantUsage>(
     endpoints.platform.tenantAction(id, "refresh-usage"),
   );
+  return data;
+}
+
+// --- Impersonation (ADR-0037) ---------------------------------------------------------------
+
+/** RED stub (Task 11): replaced by the implementation. */
+export async function fetchTenantUsers(
+  tenantId: string,
+  query: TenantUserQuery,
+): Promise<Page<TenantUser>> {
+  return fetchPage<TenantUser>(apiClient, endpoints.platform.tenantUsers(tenantId), {
+    query: { search: query.q },
+  });
+}
+
+/** RED stub (Task 11): replaced by the implementation. */
+export async function impersonateUser(
+  tenantId: string,
+  input: ImpersonateInput,
+): Promise<GrantStarted> {
+  const { data } = await apiClient.post<GrantStarted>(endpoints.platform.tenant(tenantId), input);
   return data;
 }
 

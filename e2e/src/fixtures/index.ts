@@ -36,6 +36,7 @@ import {
   FeeStructuresPage,
   ForgotPasswordPage,
   GradingScalesPage,
+  ImpersonationPage,
   LedgerPage,
   LoginPage,
   MessagesPage,
@@ -123,6 +124,7 @@ export interface E2EFixtures {
   timetablePeriodsPage: TimetablePeriodsPage;
   timetableRoomsPage: TimetableRoomsPage;
   platformConsolePage: PlatformConsolePage;
+  impersonationPage: ImpersonationPage;
   schoolSetupPage: SchoolSetupPage;
   timetableSubstitutionsPage: TimetableSubstitutionsPage;
   myTimetablePage: MyTimetablePage;
@@ -313,6 +315,9 @@ export const test = base.extend<E2EOptions & E2EFixtures, E2EWorkerFixtures>({
 
   platformConsolePage: async ({ page }, use) => {
     await use(new PlatformConsolePage(page));
+  },
+  impersonationPage: async ({ page }, use) => {
+    await use(new ImpersonationPage(page));
   },
   schoolSetupPage: async ({ page }, use) => {
     await use(new SchoolSetupPage(page));

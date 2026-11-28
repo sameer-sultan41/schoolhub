@@ -30,6 +30,7 @@ export * from "./domains/communication-store";
 export * from "./domains/communication";
 export * from "./domains/portal-store";
 export * from "./domains/platform";
+export * from "./domains/impersonation";
 export * from "./domains/portal";
 export * from "./domains/portal-leave";
 export * from "./domains/exams-setup";

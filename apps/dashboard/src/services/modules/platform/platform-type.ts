@@ -33,6 +33,11 @@ export type TenantUsage = ApiSchemas["TenantUsage"];
 export type UsageSnapshot = ApiSchemas["TenantUsageSnapshot"];
 export type PlatformJob = ApiSchemas["PlatformJob"];
 
+/** A school user the console may impersonate, and starting that impersonation (ADR-0037). */
+export type TenantUser = ApiSchemas["TenantUser"];
+export type ImpersonateInput = ApiSchemas["Impersonate"];
+export type GrantStarted = ApiSchemas["GrantStarted"];
+
 /** A quota metric's limit: a whole number, or `null` for unlimited. */
 export type Limits = Record<string, number | null>;
 
@@ -72,6 +77,14 @@ export interface PlatformPageQuery {
 export interface TenantPageQuery extends PlatformPageQuery {
   status?: TenantStatus;
   currentPlan?: string;
+}
+
+/** `GET /platform/tenants/{id}/users`: by part of a name, email or username, and a role slug. */
+export interface TenantUserQuery {
+  q?: string;
+  role?: string;
+  page?: number;
+  pageSize?: number;
 }
 
 export interface PlanPageQuery extends PlatformPageQuery {

@@ -32,6 +32,10 @@ export const endpoints = {
     mfaVerify: "/mfa:verify",
     mfaConfirm: "/mfa:confirm",
     mfaEnroll: "/auth/mfa:enroll",
+    /** The impersonation handoff (ADR-0037), straight to the API: no refresh cookie is involved.
+     * `:exchange` is anonymous; `:end` releases the impersonated session's own grant. */
+    impersonationExchange: "/auth/impersonation:exchange",
+    impersonationEnd: "/auth/impersonation:end",
   },
   /** The school's profile and configuration: a singleton (`GET`/`PATCH`). */
   schoolSettings: {
@@ -531,6 +535,8 @@ export const endpoints = {
     tenantAction: (id: string, action: string) => `/platform/tenants/${id}:${action}`,
     tenantJob: (id: string, jobId: string) => `/platform/tenants/${id}/jobs/${jobId}`,
     tenantUsage: (id: string) => `/platform/tenants/${id}/usage`,
+    /** The school's users the console may impersonate (`?q=&role=`). */
+    tenantUsers: (id: string) => `/platform/tenants/${id}/users`,
     subscription: (id: string) => `/platform/tenants/${id}/subscription`,
     subscriptionAction: (id: string, action: string) =>
       `/platform/tenants/${id}/subscription:${action}`,

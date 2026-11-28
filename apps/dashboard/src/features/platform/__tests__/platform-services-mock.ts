@@ -20,6 +20,8 @@ export function platformServicesMock() {
       "fetchTenantJob",
       "fetchTenantUsage",
       "refreshTenantUsage",
+      "fetchTenantUsers",
+      "impersonateUser",
       "fetchSubscription",
       "updateSubscription",
       "activateSubscription",
