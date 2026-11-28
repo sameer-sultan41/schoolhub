@@ -5,8 +5,11 @@ is never a tenant role: it holds platform-scope keys only, and only a platform u
 it (ADR-0036).
 """
 
-# The platform console's operators (platform-admin.md §3).
-PLATFORM_ROLES = ("platform_super_admin", "platform_support")
+# The platform console's operators (platform-admin.md §3). Named, so a rule about one of them
+# never depends on the tuple's order.
+PLATFORM_SUPER_ADMIN = "platform_super_admin"
+PLATFORM_SUPPORT = "platform_support"
+PLATFORM_ROLES = (PLATFORM_SUPER_ADMIN, PLATFORM_SUPPORT)
 
 # Holds every tenant-scope key rather than a registry list (users-and-roles.md §3).
 SCHOOL_OWNER = "school_owner"

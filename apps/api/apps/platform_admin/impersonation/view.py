@@ -17,8 +17,8 @@ from rest_framework.views import APIView
 
 from apps.platform_admin.impersonation import events, services
 from apps.platform_admin.impersonation.serializers import (
-    ExchangeResponseSerializer,
-    ExchangeSerializer,
+    ImpersonationExchangeResponseSerializer,
+    ImpersonationExchangeSerializer,
 )
 from core.api.exceptions import InvalidLink, refusal_response
 from core.api.throttling import AuthEndpointThrottle
@@ -38,22 +38,24 @@ class ImpersonationExchangeView(APIView):
     throttle_classes = [AuthEndpointThrottle]
 
     @extend_schema(
-        request=ExchangeSerializer,
+        request=ImpersonationExchangeSerializer,
         responses={
-            200: ExchangeResponseSerializer,
+            200: ImpersonationExchangeResponseSerializer,
             400: OpenApiResponse(description="invalid_link"),
         },
         auth=[],
     )
     def post(self, request: Request) -> Response:
-        payload = ExchangeSerializer(data=request.data)
+        payload = ImpersonationExchangeSerializer(data=request.data)
         payload.is_valid(raise_exception=True)
         result = services.exchange(payload.validated_data["code"])
-        if result is None:
-            events.exchange_refused(request)
-            # Returned, not raised: a raise would roll back the refusal's audit row.
+        grant, token = result.grant, result.token
+        if token is None or grant is None:
+            events.exchange_refused(request, result.grant)
+            if result.revoked is not None:
+                events.ended(result.revoked, request=request)
+            # Returned, not raised: a raise would roll back the refusal's audit rows.
             return refusal_response(request, InvalidLink())
-        grant, token = result
         events.exchanged(request, grant)
         expires_in = max(int((grant.expires_at - timezone.now()).total_seconds()), 0)
         return Response({"data": {"access": str(token), "expires_in": expires_in}})

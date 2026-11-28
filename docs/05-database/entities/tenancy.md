@@ -161,7 +161,7 @@ Indexes: unique(provider, event_id).
 | students | integer | no | — | Students not withdrawn, graduated, transferred or soft-deleted |
 | staff | integer | no | — | Staff not resigned, retired, terminated or soft-deleted |
 | storage_bytes | bigint | no | — | Sum of the school's non-deleted `files.size_bytes` |
-| impersonations_30d | integer | yes | — | Impersonation grants taken for the school in the 30 days before the snapshot; null on rows taken before PR E |
+| impersonations_30d | integer | yes | — | Impersonation grants taken for the school in the 30 days before the snapshot, not counting a grant superseded by the same operator's retry for the same person; null on rows taken before PR E |
 | modules_enabled | jsonb | no | [] | The `module.*` keys on for the school |
 
 Indexes: (tenant_id, taken_at DESC). Retention is not built yet (deferred-work.md).

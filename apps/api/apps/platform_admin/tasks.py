@@ -24,6 +24,7 @@ from decimal import Decimal
 
 from celery import shared_task
 from django.conf import settings
+from django.db import transaction
 from django.utils import timezone
 
 from apps.platform_admin import notifications
@@ -280,8 +281,18 @@ def close_expired_impersonations() -> dict[str, int]:
     `expired` end, its security event and the owners' notice (§7.3, §12). Grants are a
     platform table, so no school is bound to find them.
     """
-    closed = impersonation.close_expired()
-    for grant in closed:
-        impersonation_events.ended(grant)
-    logger.info("close-expired-impersonations: %d grant(s) closed", len(closed))
-    return {"closed": len(closed)}
+    closed = failed = 0
+    for grant_id in impersonation.expired_open_grants():
+        try:
+            # The end and its events together, or neither: a crash between them would leave
+            # an ended grant no later run picks up again, with no event and no notice.
+            with transaction.atomic():
+                grant = impersonation.close_expired(grant_id)
+                if grant is not None:
+                    impersonation_events.ended(grant)
+                    closed += 1
+        except Exception:
+            failed += 1
+            logger.exception("closing expired impersonation grant %s failed", grant_id)
+    logger.info("close-expired-impersonations: %d closed, %d failure(s)", closed, failed)
+    return {"closed": closed, "failed": failed}

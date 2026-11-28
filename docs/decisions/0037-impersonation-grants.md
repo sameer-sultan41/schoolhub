@@ -28,7 +28,10 @@ moment the grant is released or the operator loses the right to hold it. Decided
    `raw` is `secrets.token_urlsafe(32)`; only its SHA-256 is stored. It expires after
    `PLATFORM_HANDOFF_CODE_TTL_SECONDS` (never after the grant) and is spent by one conditional
    `UPDATE … WHERE handoff_used_at IS NULL`. `POST /auth/impersonation:exchange` trades it for
-   `{access, expires_in}`; every unusable code is the same 400 `invalid_link`, audited.
+   `{access, expires_in}`; every unusable code is the same 400 `invalid_link`, audited with the
+   grant it matched. A code presented again after it was spent revokes its grant (RFC 6749
+   §4.1.2): whoever exchanged it first may not be the operator. A concurrent duplicate of the
+   same exchange is refused without revoking.
 3. **The token is an access token only.** `sub` is the target, `tenant_id` its school,
    `is_platform=false`, `act={"sub": operator}` (RFC 8693), `grant_id`, `amr=["impersonation"]`
    and `exp = grant.expires_at`. No refresh token or cookie is issued, so nothing outlives the
@@ -40,8 +43,12 @@ moment the grant is released or the operator loses the right to hold it. Decided
    imports the app). The grant must be unreleased and unexpired, for exactly this user and
    operator; the school operational; the holder active, a platform user with MFA on and still
    holding `platform.tenant.impersonate`. Anything else, and no registered checker at all, is a
-   401 `impersonation_ended`. On success it sets `request.impersonated_by`, which `record_audit`
-   and `record_security_event` write to `audit_logs.impersonated_by`.
+   401 `impersonation_ended` (an `AuthenticationFailed`, so with `WWW-Authenticate`). On success
+   it sets `request.impersonated_by`, which `record_audit` and `record_security_event` write to
+   `audit_logs.impersonated_by`, and binds the grant into a context variable: the JSON log
+   formatter adds `impersonated_by` and `grant_id` to every line the request logs, and
+   `ImpersonationLogMiddleware` writes one INFO line per impersonated request (operator, target,
+   method, path, status). A mutation is attributed in the audit trail; a read, in the logs.
 5. **The target's permissions apply, never the operator's.** The request is the target user's;
    RBAC, record scope and the restricted-principal rules run unchanged. A student or guardian
    can be impersonated, and stays restricted. The account's own credentials are off limits:
@@ -71,5 +78,11 @@ moment the grant is released or the operator loses the right to hold it. Decided
 - A deployment without `apps.platform_admin` refuses every impersonation token (fail closed).
 - Reloading the impersonated tab loses the in-memory token; the operator starts a new grant,
   which supersedes the old one.
+- **Residual risk: access that outlives the grant.** Impersonating a `school_owner` or an admin
+  lets the operator do whatever that user may, including inviting a new staff account to an
+  address the operator controls; that account keeps working after the grant ends. It is within
+  the target's permissions and audited with `impersonated_by`, so it is detectable, not
+  prevented. Alerting on `platform.impersonation.*` and on invitations made under
+  impersonation is deferred with SEC-19's alerting (`docs/deferred-work.md`).
 - The tenant-visible impersonation log is deferred (`docs/deferred-work.md`); owners get the
   in-app notice instead.

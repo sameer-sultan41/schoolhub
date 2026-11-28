@@ -42,9 +42,12 @@ def exchanged(request, grant: ImpersonationGrant) -> None:
     record_security_event(request, EXCHANGED, tenant=grant.tenant, **_context(grant))
 
 
-def exchange_refused(request) -> None:
-    # The code names nothing we may reveal; the row records that one was tried, and from where.
-    record_security_event(request, EXCHANGE_REFUSED)
+def exchange_refused(request, grant: ImpersonationGrant | None) -> None:
+    """A refused code. The row names the grant it matched, if any; the response never does."""
+    if grant is None:
+        record_security_event(request, EXCHANGE_REFUSED)
+    else:
+        record_security_event(request, EXCHANGE_REFUSED, tenant=grant.tenant, **_context(grant))
 
 
 def ended(grant: ImpersonationGrant, *, request=None) -> None:
@@ -61,16 +64,26 @@ def ended(grant: ImpersonationGrant, *, request=None) -> None:
         _notify(grant, "ended")
 
 
+# Named to the school without any of the operator's contact details.
+SUPPORT_NAME = "SchoolHub support"
+_WHEN = "%Y-%m-%d %H:%M UTC"
+
+
 def _notify(grant: ImpersonationGrant, event: str) -> None:
+    if event == "started":
+        timing = f"It ends by {grant.expires_at.strftime(_WHEN)} at the latest."
+    else:
+        timing = f"It ended at {(grant.released_at or grant.expires_at).strftime(_WHEN)}."
+    operator = grant.granted_to.get_full_name()
     notifications.notify_owners(
         grant.tenant,
         notifications.IMPERSONATION,
         context={
             "impersonation.event": event,
-            "impersonation.operator": grant.granted_to.get_full_name() or grant.granted_to.email,
+            "impersonation.operator": f"{SUPPORT_NAME} ({operator})" if operator else SUPPORT_NAME,
             "impersonation.target": grant.target_user.get_full_name() or grant.target_user.email,
             "impersonation.reason": grant.reason,
-            "impersonation.expires_at": grant.expires_at.strftime("%Y-%m-%d %H:%M UTC"),
+            "impersonation.timing": timing,
         },
         source_type="impersonation_grant",
         source_id=grant.pk,

@@ -7,15 +7,18 @@ from rest_framework import serializers
 from core.rbac.models import User
 
 
-class ImpersonateSerializer(serializers.Serializer):
+class ImpersonateRequestSerializer(serializers.Serializer):
     user_id = serializers.UUIDField()
-    reason = serializers.CharField(max_length=1000, help_text="Why; shown in the audit log.")
+    reason = serializers.CharField(
+        max_length=1000,
+        help_text="Why. Kept in the audit log, and shown to the school's owners in their notice.",
+    )
     duration_minutes = serializers.IntegerField(
         help_text="1 to PLATFORM_IMPERSONATION_MAX_MINUTES; outside it, a 422."
     )
 
 
-class GrantStartedSerializer(serializers.Serializer):
+class ImpersonationGrantStartedSerializer(serializers.Serializer):
     """Schema only: the grant, and the link that opens the school's dashboard as the user."""
 
     grant_id = serializers.UUIDField()
@@ -25,18 +28,18 @@ class GrantStartedSerializer(serializers.Serializer):
     )
 
 
-class ExchangeSerializer(serializers.Serializer):
+class ImpersonationExchangeSerializer(serializers.Serializer):
     code = serializers.CharField(max_length=200)
 
 
-class ExchangeResponseSerializer(serializers.Serializer):
+class ImpersonationExchangeResponseSerializer(serializers.Serializer):
     """Schema only: an access token with no refresh token, valid until the grant expires."""
 
     access = serializers.CharField()
     expires_in = serializers.IntegerField()
 
 
-class TenantUserSerializer(serializers.ModelSerializer):
+class PlatformTenantUserSerializer(serializers.ModelSerializer):
     """A school user the console may impersonate: who, and their roles' slugs."""
 
     name = serializers.CharField(source="get_full_name", read_only=True)

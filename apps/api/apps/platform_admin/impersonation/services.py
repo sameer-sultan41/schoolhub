@@ -27,13 +27,25 @@ from core.rbac.impersonation import ACTOR_CLAIM, GRANT_CLAIM, IMPERSONATION_AMR,
 from core.rbac.invitations.services import hash_token
 from core.rbac.models import User, UserRole
 from core.rbac.permissions import effective_permission_keys
-from core.rbac.roles import PLATFORM_ROLES
+from core.rbac.roles import PLATFORM_SUPER_ADMIN
 from core.tenancy.models import Tenant
 
 IMPERSONATE_KEY = "platform.tenant.impersonate"
 HANDOFF_PATH = "/impersonate"
 # The platform role that may end another operator's grant (§4: the console's owner role).
-REVOKING_ROLE = PLATFORM_ROLES[0]
+REVOKING_ROLE = PLATFORM_SUPER_ADMIN
+
+
+@dataclass(frozen=True)
+class Exchanged:
+    """What one exchange did: a token, or a refusal naming the grant the code matched, if any.
+
+    ``revoked`` is the grant a reused code just revoked (RFC 6749 §4.1.2), for its events.
+    """
+
+    grant: ImpersonationGrant | None
+    token: AccessToken | None = None
+    revoked: ImpersonationGrant | None = None
 
 
 @dataclass(frozen=True)
@@ -96,10 +108,13 @@ def start(
         )
     )
     for previous in superseded:
-        previous.released_at = now
-        previous.end_reason = (
-            ImpersonationEnd.EXPIRED if previous.expires_at <= now else ImpersonationEnd.SUPERSEDED
-        )
+        # A grant whose time already ran out ended then, as the sweep would record it.
+        if previous.expires_at <= now:
+            previous.released_at = previous.expires_at
+            previous.end_reason = ImpersonationEnd.EXPIRED
+        else:
+            previous.released_at = now
+            previous.end_reason = ImpersonationEnd.SUPERSEDED
         previous.save(update_fields=["released_at", "end_reason", "updated_at"])
 
     code = secrets.token_urlsafe(32)
@@ -152,12 +167,13 @@ def live_grant(
     )
 
 
-def exchange(code: str) -> tuple[ImpersonationGrant, AccessToken] | None:
-    """Spend a handoff code: the grant and its access token, or None for an unusable code.
+def exchange(code: str) -> Exchanged:
+    """Spend a handoff code: the grant and its access token, or a refusal.
 
     The claim is one conditional ``UPDATE``: of two concurrent exchanges of one code, the second
-    waits on the row and then matches nothing. The token has no refresh token, and expires with
-    the grant (``exp = expires_at``).
+    waits on the row and then matches nothing, and is refused. A code presented again after it
+    was spent revokes its grant (RFC 6749 §4.1.2): someone else holds it, or held it first. The
+    token has no refresh token, and expires with the grant (``exp = expires_at``).
     """
     now = timezone.now()
     grant = (
@@ -165,13 +181,18 @@ def exchange(code: str) -> tuple[ImpersonationGrant, AccessToken] | None:
         .filter(handoff_code_hash=hash_token(code))
         .first()
     )
-    if grant is None or grant.handoff_expires_at <= now or not _live(grant):
-        return None
+    if grant is None:
+        return Exchanged(grant=None)
+    if grant.handoff_used_at is not None:
+        return Exchanged(grant=grant, revoked=end(grant.pk, reason=ImpersonationEnd.REVOKED))
+    if grant.handoff_expires_at <= now or not _live(grant):
+        return Exchanged(grant=grant)
     claimed = ImpersonationGrant.objects.filter(
         pk=grant.pk, handoff_used_at__isnull=True, released_at__isnull=True
     ).update(handoff_used_at=now, updated_at=now)
     if not claimed:
-        return None
+        # A concurrent duplicate of the same exchange: refused, without revoking the winner.
+        return Exchanged(grant=grant)
 
     token = AccessToken.for_user(grant.target_user)
     token["tenant_id"] = str(grant.tenant_id)
@@ -180,7 +201,7 @@ def exchange(code: str) -> tuple[ImpersonationGrant, AccessToken] | None:
     token[ACTOR_CLAIM] = {"sub": str(grant.granted_to_id)}
     token[GRANT_CLAIM] = str(grant.pk)
     token.set_exp(from_time=grant.expires_at, lifetime=timedelta(0))
-    return grant, token
+    return Exchanged(grant=grant, token=token)
 
 
 def end(grant_id: uuid.UUID, *, reason: str) -> ImpersonationGrant | None:
@@ -207,28 +228,46 @@ def may_revoke_others(user_id: uuid.UUID) -> bool:
     ).exists()
 
 
-def close_expired() -> list[ImpersonationGrant]:
-    """Record the end of every grant whose time ran out unreleased (`released_at = expires_at`)."""
-    closed = []
-    for grant in ImpersonationGrant.objects.select_related(
-        "tenant", "target_user", "granted_to"
-    ).filter(released_at__isnull=True, expires_at__lte=timezone.now()):
-        ended = ImpersonationGrant.objects.filter(pk=grant.pk, released_at__isnull=True).update(
-            released_at=grant.expires_at,
-            end_reason=ImpersonationEnd.EXPIRED,
-            updated_at=timezone.now(),
-        )
-        if ended:
-            grant.released_at = grant.expires_at
-            grant.end_reason = ImpersonationEnd.EXPIRED
-            closed.append(grant)
-    return closed
+def expired_open_grants() -> list[uuid.UUID]:
+    """The grants whose time ran out and whose end is not recorded yet (the sweep's work)."""
+    return list(
+        ImpersonationGrant.objects.filter(
+            released_at__isnull=True, expires_at__lte=timezone.now()
+        ).values_list("pk", flat=True)
+    )
+
+
+def close_expired(grant_id: uuid.UUID) -> ImpersonationGrant | None:
+    """Record one expired grant's end (`released_at = expires_at`); None if already ended.
+
+    The caller wraps this and the end's events in one transaction, so neither is kept alone.
+    """
+    grant = (
+        ImpersonationGrant.objects.select_for_update()
+        .select_related("tenant", "target_user", "granted_to")
+        .filter(pk=grant_id, released_at__isnull=True, expires_at__lte=timezone.now())
+        .first()
+    )
+    if grant is None:
+        return None
+    grant.released_at = grant.expires_at
+    grant.end_reason = ImpersonationEnd.EXPIRED
+    grant.save(update_fields=["released_at", "end_reason", "updated_at"])
+    return grant
 
 
 def count_recent(tenant_id: uuid.UUID, *, days: int = 30) -> int:
-    """Grants taken for the school in the last ``days`` days (the usage snapshot's column)."""
+    """Grants taken for the school in the last ``days`` days (the usage snapshot's column).
+
+    A superseded grant is not counted: it was replaced by the same operator's retry for the same
+    person, which is one impersonation, not two.
+    """
     since = timezone.now() - timedelta(days=days)
-    return ImpersonationGrant.objects.filter(tenant_id=tenant_id, created_at__gte=since).count()
+    return (
+        ImpersonationGrant.objects.filter(tenant_id=tenant_id, created_at__gte=since)
+        .exclude(end_reason=ImpersonationEnd.SUPERSEDED)
+        .count()
+    )
 
 
 def release_from_session(grant_id: uuid.UUID, *, request) -> None:

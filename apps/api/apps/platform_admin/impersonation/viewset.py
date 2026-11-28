@@ -18,9 +18,9 @@ from rest_framework.response import Response
 
 from apps.platform_admin.impersonation import events, services
 from apps.platform_admin.impersonation.serializers import (
-    GrantStartedSerializer,
-    ImpersonateSerializer,
-    TenantUserSerializer,
+    ImpersonateRequestSerializer,
+    ImpersonationGrantStartedSerializer,
+    PlatformTenantUserSerializer,
 )
 from apps.platform_admin.models import ImpersonationEnd, ImpersonationGrant
 from core.api.pagination import PageNumberPagination
@@ -41,9 +41,9 @@ class TenantImpersonationViewSet(PlatformTenantNestedMixin, PlatformViewSet):
 
     @extend_schema(
         summary="Impersonate a school user: a time-boxed grant and its one-time handoff link",
-        request=ImpersonateSerializer,
+        request=ImpersonateRequestSerializer,
         responses={
-            201: GrantStartedSerializer,
+            201: ImpersonationGrantStartedSerializer,
             409: OpenApiResponse(description="conflict: the school is not operational."),
             422: OpenApiResponse(
                 description="domain_rule_violation: a duration out of range, or a user who is "
@@ -52,7 +52,7 @@ class TenantImpersonationViewSet(PlatformTenantNestedMixin, PlatformViewSet):
         },
     )
     def impersonate(self, request: Request, tenant_pk=None) -> Response:
-        payload = ImpersonateSerializer(data=request.data)
+        payload = ImpersonateRequestSerializer(data=request.data)
         payload.is_valid(raise_exception=True)
         reason = payload.validated_data["reason"].strip()
         if not reason:
@@ -69,7 +69,7 @@ class TenantImpersonationViewSet(PlatformTenantNestedMixin, PlatformViewSet):
             events.ended(previous, request=request)
         events.granted(request, started.grant)
         handoff_url = account_link(request.tenant, services.HANDOFF_PATH, code=started.code)
-        data = GrantStartedSerializer(
+        data = ImpersonationGrantStartedSerializer(
             {
                 "grant_id": started.grant.pk,
                 "expires_at": started.grant.expires_at,
@@ -90,7 +90,7 @@ class TenantUserViewSet(PlatformTenantNestedMixin, mixins.ListModelMixin, Platfo
     name, email or username; ``role`` a role slug.
     """
 
-    serializer_class = TenantUserSerializer
+    serializer_class = PlatformTenantUserSerializer
     pagination_class = PageNumberPagination
     # Filtered by hand below; the default backends would advertise `ordering` on a list that
     # offers none.

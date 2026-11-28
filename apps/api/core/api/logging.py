@@ -42,6 +42,7 @@ _STANDARD_ATTRS = frozenset(
 class JSONFormatter(logging.Formatter):
     def format(self, record: logging.LogRecord) -> str:
         from core.api.middleware import get_current_request_id
+        from core.rbac.impersonation import get_current_impersonation
         from core.tenancy.context import get_current_tenant_id
 
         payload = {
@@ -58,6 +59,12 @@ class JSONFormatter(logging.Formatter):
         tenant_id = get_current_tenant_id()
         if tenant_id:
             payload["tenant_id"] = str(tenant_id)
+
+        # Every line written under an impersonation names the operator (ADR-0037).
+        impersonation = get_current_impersonation()
+        if impersonation is not None:
+            payload["impersonated_by"] = str(impersonation.operator_id)
+            payload["grant_id"] = str(impersonation.grant_id)
 
         for key, value in record.__dict__.items():
             if key not in _STANDARD_ATTRS and not key.startswith("_"):

@@ -133,6 +133,9 @@ MIDDLEWARE = [
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
     # Assigns X-Request-ID and binds it to logs.
     "core.api.middleware.RequestIDMiddleware",
+    # Inside the request id's scope: logs each impersonated request, and scopes the
+    # impersonation the authenticator binds for the log formatter (ADR-0037).
+    "core.rbac.middleware.ImpersonationLogMiddleware",
     # Collects the request's `meta.warnings` (core.api.warnings).
     "core.api.warnings.ResponseWarningsMiddleware",
     # Resolves the tenant from the authenticated principal and sets app.tenant_id

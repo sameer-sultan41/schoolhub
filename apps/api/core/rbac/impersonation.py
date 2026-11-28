@@ -11,10 +11,12 @@ from __future__ import annotations
 
 import uuid
 from collections.abc import Callable
+from contextvars import ContextVar, Token
 from dataclasses import dataclass
 from datetime import datetime
 
 from rest_framework import permissions, status
+from rest_framework.exceptions import AuthenticationFailed
 from rest_framework.request import Request
 
 from core.api.exceptions import CodedAPIException
@@ -24,8 +26,11 @@ GRANT_CLAIM = "grant_id"
 ACTOR_CLAIM = "act"
 
 
-class ImpersonationEnded(CodedAPIException):
-    """The token's grant was released, expired or revoked, or its holder may no longer use it."""
+class ImpersonationEnded(CodedAPIException, AuthenticationFailed):
+    """The token's grant was released, expired or revoked, or its holder may no longer use it.
+
+    An ``AuthenticationFailed``, so DRF adds ``WWW-Authenticate`` to the 401 (RFC 9110 §15.5.2).
+    """
 
     status_code = status.HTTP_401_UNAUTHORIZED
     default_detail = "This support session has ended."
@@ -63,6 +68,24 @@ class _Hooks:
 
 
 _hooks: _Hooks | None = None
+
+# The grant the current request runs under, for the log formatter: bound by the authenticator,
+# scoped per request by `core.rbac.middleware.ImpersonationLogMiddleware`.
+_current_impersonation: ContextVar[LiveGrant | None] = ContextVar(
+    "current_impersonation", default=None
+)
+
+
+def bind_impersonation(live: LiveGrant | None) -> Token[LiveGrant | None]:
+    return _current_impersonation.set(live)
+
+
+def unbind_impersonation(token: Token[LiveGrant | None]) -> None:
+    _current_impersonation.reset(token)
+
+
+def get_current_impersonation() -> LiveGrant | None:
+    return _current_impersonation.get()
 
 
 def register_impersonation_hooks(*, check: GrantChecker, end: GrantEnder) -> None:

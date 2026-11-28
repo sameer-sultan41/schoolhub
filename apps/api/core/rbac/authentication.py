@@ -60,4 +60,6 @@ class ImpersonationAwareJWTAuthentication(JWTAuthentication):
         # DRF wraps the Django request; module code and audit reach for either.
         request._request.impersonated_by = live.operator_id
         request._request.impersonation = live
+        # For the log lines of the rest of the request (`core.api.logging.JSONFormatter`).
+        impersonation.bind_impersonation(live)
         return result

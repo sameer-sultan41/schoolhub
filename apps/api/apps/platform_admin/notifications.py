@@ -115,7 +115,7 @@ _IMPERSONATION_VARIABLES = {
     "impersonation.operator",
     "impersonation.target",
     "impersonation.reason",
-    "impersonation.expires_at",
+    "impersonation.timing",
 }
 catalog.register(
     IMPERSONATION,
@@ -130,10 +130,10 @@ templates.register(
     channel=NotificationChannel.IN_APP,
     subject="{{ school.name }}: a SchoolHub support session {{ impersonation.event }}",
     body=(
-        "SchoolHub support ({{ impersonation.operator }}) {{ impersonation.event }} a session "
-        "signed in as {{ impersonation.target }}. Reason: {{ impersonation.reason }}. It ends "
-        "by {{ impersonation.expires_at }} at the latest, and every change made in it is "
-        "recorded in the audit log under both names."
+        "{{ impersonation.operator }} {{ impersonation.event }} a session signed in as "
+        "{{ impersonation.target }}. Reason: {{ impersonation.reason }}. "
+        "{{ impersonation.timing }} Every change made in it is recorded in the audit log "
+        "under both names."
     ),
     variables=_IMPERSONATION_VARIABLES,
 )
