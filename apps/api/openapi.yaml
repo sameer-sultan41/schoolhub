@@ -5241,6 +5241,9 @@ paths:
               schema:
                 $ref: '#/components/schemas/File'
           description: ''
+        '409':
+          description: 'quota_exceeded: the school''s plan limit would be passed (`meta`
+            {metric, limit, usage, adding}).'
         '422':
           description: A portal user asked for a staff-only purpose
   /api/v1/files/{id}:
@@ -9384,6 +9387,9 @@ paths:
               schema:
                 $ref: '#/components/schemas/Plan'
           description: ''
+        '409':
+          description: 'limit_below_usage: a limit would drop below a school''s latest
+            usage; `meta.over_usage` lists each school and metric.'
     delete:
       operationId: platform_plans_destroy
       description: '`GET/POST /platform/plans` and `GET/PATCH/DELETE /platform/plans/{id}`.'
@@ -9404,6 +9410,50 @@ paths:
           description: No response body
         '409':
           description: 'plan_in_use: a school is on this plan.'
+  /api/v1/platform/reports/{key}:
+    get:
+      operationId: platform_reports_retrieve
+      description: |-
+        A platform console viewset. Declare ``required_permission`` and ``required_permission_map``.
+
+        Gates, in order:
+        - ``IsAuthenticated``: anonymous callers get a 401.
+        - ``IsPlatformPrincipal``: a tenant principal gets a 404, and a platform token without
+          ``"otp"`` in its ``amr`` gets a 403 ``mfa_required``.
+        - ``HasPermissionKey``: a platform user without the route's key gets a 403.
+
+        No tenant is bound, so a route here reads platform tables only (``tenants``, ``plans``).
+        One that reads or writes a school's own rows is nested under its tenant through
+        `PlatformTenantNestedMixin`, which binds that one school.
+      summary: 'A platform report: tenant-overview, revenue or usage'
+      parameters:
+      - in: query
+        name: format
+        schema:
+          type: string
+          enum:
+          - csv
+          - json
+          - xlsx
+      - in: path
+        name: key
+        schema:
+          type: string
+        required: true
+      tags:
+      - platform
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlatformReport'
+          description: JSON (the default); CSV or XLSX answer the sections as one
+            table with a leading `section` column, as an attachment.
+        '404':
+          description: An unknown report key.
   /api/v1/platform/tenants:
     get:
       operationId: platform_tenants_list
@@ -9656,6 +9706,92 @@ paths:
         '409':
           description: 'toggle_refused: the school still needs this flag, or the override
             would switch a kill switch on.'
+  /api/v1/platform/tenants/{tenant_pk}/jobs/{job_id}:
+    get:
+      operationId: platform_tenants_jobs_retrieve
+      description: |-
+        Binds the target school of a ``.../tenants/<tenant_pk>/...`` route for the whole request.
+
+        **One target tenant per platform request.** ``initial()`` loads the tenant named by the
+        ``tenant_pk`` URL kwarg (404 if there is none), binds it the way
+        `core.api.viewsets.TenantScopedViewSetMixin` binds the caller's own, and sets
+        ``request.tenant``, so `record_audit` attributes each row to it. Under
+        ``ATOMIC_REQUESTS`` the binding's ``SET LOCAL`` lasts the whole request: reads and writes
+        alike see that school's rows and no other's.
+
+        The tenant is loaded only after authentication and the permission checks have passed, so
+        an unknown id answers 401, 404 or 403 exactly as a known one does, and is no oracle.
+
+        List it before `PlatformViewSet`: ``class X(PlatformTenantNestedMixin, PlatformViewSet)``.
+      summary: Poll one of the school's platform jobs
+      parameters:
+      - in: path
+        name: job_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      - in: path
+        name: tenant_pk
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - platform
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BackgroundJob'
+          description: ''
+  /api/v1/platform/tenants/{tenant_pk}/jobs/{job_id}:download:
+    post:
+      operationId: platform_tenants_jobs_:download_create
+      description: |-
+        Binds the target school of a ``.../tenants/<tenant_pk>/...`` route for the whole request.
+
+        **One target tenant per platform request.** ``initial()`` loads the tenant named by the
+        ``tenant_pk`` URL kwarg (404 if there is none), binds it the way
+        `core.api.viewsets.TenantScopedViewSetMixin` binds the caller's own, and sets
+        ``request.tenant``, so `record_audit` attributes each row to it. Under
+        ``ATOMIC_REQUESTS`` the binding's ``SET LOCAL`` lasts the whole request: reads and writes
+        alike see that school's rows and no other's.
+
+        The tenant is loaded only after authentication and the permission checks have passed, so
+        an unknown id answers 401, 404 or 403 exactly as a known one does, and is no oracle.
+
+        List it before `PlatformViewSet`: ``class X(PlatformTenantNestedMixin, PlatformViewSet)``.
+      summary: A signed link to a finished export's archive (audited)
+      parameters:
+      - in: path
+        name: job_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      - in: path
+        name: tenant_pk
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - platform
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExportDownload'
+          description: ''
+        '409':
+          description: 'conflict: the job has not succeeded.'
   /api/v1/platform/tenants/{tenant_pk}/subscription:
     get:
       operationId: platform_tenants_subscription_retrieve
@@ -9718,7 +9854,8 @@ paths:
           description: ''
         '409':
           description: 'invalid_transition: the subscription''s status does not allow
-            this move; no_live_subscription: the school has none.'
+            this move; no_live_subscription: the school has none; limit_below_usage:
+            a limit would drop below the school''s latest usage (`meta.over_usage`).'
   /api/v1/platform/tenants/{tenant_pk}/subscription:activate:
     post:
       operationId: platform_tenants_subscription:activate_create
@@ -9760,7 +9897,9 @@ paths:
         '409':
           description: 'invalid_transition: the subscription''s status does not allow
             this move; subscription_exists: the school already has a live subscription;
-            toggle_refused: the plan would switch off a module the school still needs.'
+            toggle_refused: the plan would switch off a module the school still needs;
+            limit_below_usage: a paid sign-up onto a plan whose limits are below the
+            school''s usage, without acknowledge_over_usage.'
         '422':
           description: No active plan has this code.
   /api/v1/platform/tenants/{tenant_pk}/subscription:change-plan:
@@ -9804,7 +9943,8 @@ paths:
         '409':
           description: 'invalid_transition: the subscription''s status does not allow
             this move; no_live_subscription: the school has none; toggle_refused:
-            the plan would switch off a module the school still needs.'
+            the plan would switch off a module the school still needs; limit_below_usage:
+            a limit would drop below the school''s latest usage (`meta.over_usage`).'
         '422':
           description: No active plan has this code, or it is the same.
   /api/v1/platform/tenants/{tenant_pk}/subscription:mark-payment-failed:
@@ -9876,6 +10016,29 @@ paths:
         '409':
           description: 'invalid_transition: the subscription''s status does not allow
             this move; no_live_subscription: the school has none.'
+  /api/v1/platform/tenants/{tenant_pk}/usage:
+    get:
+      operationId: platform_tenants_usage_retrieve
+      description: '`GET .../tenants/{tenant_pk}/usage` and `POST .../tenants/{tenant_pk}:refresh-usage`.'
+      summary: A school's latest usage snapshot and its effective limits
+      parameters:
+      - in: path
+        name: tenant_pk
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - platform
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TenantUsage'
+          description: ''
   /api/v1/platform/tenants/{tenant_pk}:delete:
     post:
       operationId: platform_tenants_:delete_create
@@ -9913,6 +10076,44 @@ paths:
           description: ''
         '409':
           description: invalid_transition, or export_required
+  /api/v1/platform/tenants/{tenant_pk}:export:
+    post:
+      operationId: platform_tenants_:export_create
+      description: |-
+        Binds the target school of a ``.../tenants/<tenant_pk>/...`` route for the whole request.
+
+        **One target tenant per platform request.** ``initial()`` loads the tenant named by the
+        ``tenant_pk`` URL kwarg (404 if there is none), binds it the way
+        `core.api.viewsets.TenantScopedViewSetMixin` binds the caller's own, and sets
+        ``request.tenant``, so `record_audit` attributes each row to it. Under
+        ``ATOMIC_REQUESTS`` the binding's ``SET LOCAL`` lasts the whole request: reads and writes
+        alike see that school's rows and no other's.
+
+        The tenant is loaded only after authentication and the permission checks have passed, so
+        an unknown id answers 401, 404 or 403 exactly as a known one does, and is no oracle.
+
+        List it before `PlatformViewSet`: ``class X(PlatformTenantNestedMixin, PlatformViewSet)``.
+      summary: Export the school's data and files (a job; poll .../jobs/{job_id})
+      parameters:
+      - in: path
+        name: tenant_pk
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - platform
+      security:
+      - jwtAuth: []
+      responses:
+        '202':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExportAccepted'
+          description: An export already queued or running is answered instead of
+            a new one; one in flight past PLATFORM_EXPORT_TIME_LIMIT_SECONDS is failed
+            and replaced.
   /api/v1/platform/tenants/{tenant_pk}:provision:
     post:
       operationId: platform_tenants_:provision_create
@@ -9952,6 +10153,29 @@ paths:
             action.'
         '422':
           description: An unknown or inactive plan_code, or no contact
+  /api/v1/platform/tenants/{tenant_pk}:refresh-usage:
+    post:
+      operationId: platform_tenants_:refresh_usage_create
+      description: '`GET .../tenants/{tenant_pk}/usage` and `POST .../tenants/{tenant_pk}:refresh-usage`.'
+      summary: Take a usage snapshot of the school now
+      parameters:
+      - in: path
+        name: tenant_pk
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - platform
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TenantUsage'
+          description: ''
   /api/v1/platform/tenants/{tenant_pk}:reinstate:
     post:
       operationId: platform_tenants_:reinstate_create
@@ -12420,6 +12644,9 @@ paths:
               schema:
                 $ref: '#/components/schemas/Staff'
           description: ''
+        '409':
+          description: 'quota_exceeded: the school''s plan limit would be passed (`meta`
+            {metric, limit, usage, adding}).'
   /api/v1/staff-attendance:
     get:
       operationId: staff_attendance_list
@@ -12805,6 +13032,9 @@ paths:
       responses:
         '202':
           description: '{''data'': {''job_id'': str, ''status'': ''queued''}}'
+        '409':
+          description: 'quota_exceeded: the school''s plan limit would be passed (`meta`
+            {metric, limit, usage, adding}).'
   /api/v1/staff-qualifications/{id}:
     get:
       operationId: staff_qualifications_retrieve
@@ -13776,6 +14006,9 @@ paths:
       responses:
         '202':
           description: '{''data'': {''job_id'': str, ''status'': ''queued''}}'
+        '409':
+          description: 'quota_exceeded: the school''s plan limit would be passed (`meta`
+            {metric, limit, usage, adding}).'
   /api/v1/student-promotions:
     get:
       operationId: student_promotions_list
@@ -14501,6 +14734,9 @@ paths:
               schema:
                 $ref: '#/components/schemas/Student'
           description: ''
+        '409':
+          description: 'quota_exceeded: the school''s plan limit would be passed (`meta`
+            {metric, limit, usage, adding}).'
   /api/v1/students/{id}:
     get:
       operationId: students_retrieve
@@ -19448,6 +19684,31 @@ components:
         * `paid` - Paid
         * `rejected` - Rejected
         * `reversed` - Reversed
+    ExportAccepted:
+      type: object
+      properties:
+        job_id:
+          type: string
+          format: uuid
+          description: Poll .../tenants/{tenant_pk}/jobs/{job_id}.
+        status:
+          type: string
+          description: queued, or the status of the export in flight.
+      required:
+      - job_id
+      - status
+    ExportDownload:
+      type: object
+      properties:
+        download_url:
+          type: string
+          description: A signed link to the archive.
+        expires_in:
+          type: integer
+          description: Seconds the link stays valid.
+      required:
+      - download_url
+      - expires_in
     FeatureFlag:
       type: object
       properties:
@@ -25760,8 +26021,8 @@ components:
         acknowledge_over_usage:
           type: boolean
           writeOnly: true
-          description: Lower a limit below a school's current usage anyway (checked
-            from PR C).
+          description: Lower a limit below a school's latest usage snapshot anyway;
+            without it that is a 409 limit_below_usage.
     PatchedPromotionDecision:
       type: object
       description: |-
@@ -26608,6 +26869,11 @@ components:
             minimum: 0
             nullable: true
           nullable: true
+        acknowledge_over_usage:
+          type: boolean
+          default: false
+          description: Lower a limit below the school's latest usage snapshot anyway;
+            without it that is a 409 limit_below_usage.
     PatchedTeacherAllocation:
       type: object
       properties:
@@ -27191,14 +27457,38 @@ components:
         acknowledge_over_usage:
           type: boolean
           writeOnly: true
-          description: Lower a limit below a school's current usage anyway (checked
-            from PR C).
+          description: Lower a limit below a school's latest usage snapshot anyway;
+            without it that is a 409 limit_below_usage.
       required:
       - code
       - currency
       - enabled_modules
       - name
       - price_amount
+    PlatformReport:
+      type: object
+      properties:
+        key:
+          type: string
+        title:
+          type: string
+        generated_at:
+          type: string
+          format: date-time
+        sections:
+          type: object
+          additionalProperties:
+            type: array
+            items:
+              type: object
+              additionalProperties: {}
+          description: Named tables; every row of a section has the same keys (platform-admin
+            §7.9).
+      required:
+      - generated_at
+      - key
+      - sections
+      - title
     PortalChild:
       type: object
       properties:
@@ -30605,6 +30895,11 @@ components:
           type: string
           format: date-time
           description: After the start.
+        acknowledge_over_usage:
+          type: boolean
+          default: false
+          description: A paid sign-up onto a plan whose limits are below the school's
+            latest usage snapshot goes ahead anyway; without it that is a 409 limit_below_usage.
       required:
       - current_period_end
       - current_period_start
@@ -30614,6 +30909,11 @@ components:
         plan_code:
           type: string
           maxLength: 50
+        acknowledge_over_usage:
+          type: boolean
+          default: false
+          description: Move to a plan whose limits sit below the school's latest usage
+            snapshot anyway; without it that is a 409 limit_below_usage.
       required:
       - plan_code
     SubscriptionPayment:
@@ -31126,6 +31426,87 @@ components:
       required:
       - name
       - slug
+    TenantUsage:
+      type: object
+      description: The school's latest snapshot (null before its first) and its effective
+        limits.
+      properties:
+        snapshot:
+          allOf:
+          - $ref: '#/components/schemas/TenantUsageSnapshot'
+          readOnly: true
+          nullable: true
+        limits:
+          type: object
+          additionalProperties:
+            type: integer
+            nullable: true
+          readOnly: true
+          description: Every quota metric's effective limit; null is unlimited. `storage_gb`
+            is GiB.
+      required:
+      - limits
+      - snapshot
+    TenantUsageSnapshot:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        taken_at:
+          type: string
+          format: date-time
+          readOnly: true
+        status:
+          allOf:
+          - $ref: '#/components/schemas/TenantStatusEnum'
+          readOnly: true
+        plan_code:
+          type: string
+          readOnly: true
+          description: The live plan's code; blank for none.
+        mrr_amount:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,2})?$
+          readOnly: true
+          description: The plan's price per month while paying (active or past due);
+            0 otherwise.
+        currency:
+          type: string
+          readOnly: true
+        students:
+          type: integer
+          readOnly: true
+        staff:
+          type: integer
+          readOnly: true
+        storage_bytes:
+          type: integer
+          readOnly: true
+        impersonations_30d:
+          type: integer
+          readOnly: true
+          nullable: true
+          description: Impersonation grants in the last 30 days (PR E).
+        modules_enabled:
+          type: array
+          items:
+            type: string
+          readOnly: true
+      required:
+      - currency
+      - id
+      - impersonations_30d
+      - modules_enabled
+      - mrr_amount
+      - plan_code
+      - staff
+      - status
+      - storage_bytes
+      - students
+      - taken_at
     Term:
       type: object
       properties:

@@ -7,7 +7,7 @@ from datetime import date
 
 from django.db import transaction
 
-from apps.staff_management.models import EmploymentStatus, Staff
+from apps.staff_management.models import EXITED_EMPLOYMENT_STATUSES, EmploymentStatus, Staff
 from apps.staff_management.staff.services.access import end_staff_access
 from core.api.exceptions import Conflict, DomainRuleViolation
 
@@ -83,11 +83,7 @@ def exit_staff(
     actor_id: uuid.UUID,
     exit_type: str = EmploymentStatus.RESIGNED,
 ) -> Staff:
-    if staff.employment_status in (
-        EmploymentStatus.RESIGNED,
-        EmploymentStatus.RETIRED,
-        EmploymentStatus.TERMINATED,
-    ):
+    if staff.employment_status in EXITED_EMPLOYMENT_STATUSES:
         raise Conflict(f"This staff member has already exited ({staff.employment_status}).")
     if exit_date < staff.joining_date:
         raise DomainRuleViolation({"exit_date": "exit_date must be on or after joining_date."})

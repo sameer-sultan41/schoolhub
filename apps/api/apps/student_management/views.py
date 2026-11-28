@@ -14,7 +14,12 @@ from typing import TYPE_CHECKING
 from django.db.models import F
 from django.http import Http404
 from django.shortcuts import get_object_or_404
-from drf_spectacular.utils import OpenApiResponse, PolymorphicProxySerializer, extend_schema
+from drf_spectacular.utils import (
+    OpenApiResponse,
+    PolymorphicProxySerializer,
+    extend_schema,
+    extend_schema_view,
+)
 from rest_framework import mixins, serializers, viewsets
 from rest_framework.parsers import MultiPartParser
 from rest_framework.response import Response
@@ -94,8 +99,10 @@ from core.api.pagination import PageNumberPagination
 from core.api.viewsets import ActionResponse, TenantModelViewSet, TenantScopedViewSetMixin
 from core.files.serializers import AttachmentDownloadSerializer
 from core.idempotency.services import replay_or_execute
+from core.imports.tabular import count_rows
 from core.jobs.services import create_job, enqueue_job
 from core.rbac.permissions import holds_key_for, route_permission, scope_queryset
+from core.tenancy.quotas import QUOTA_EXCEEDED_RESPONSE, assert_room
 
 # The key that lets a withdrawal waive outstanding clearance (`withdraw`).
 WITHDRAWAL_APPROVE = "students.withdrawal.approve"
@@ -115,6 +122,9 @@ _HISTORY_EVENT_SERIALIZERS: dict[str, type[serializers.Serializer]] = {
 }
 
 
+@extend_schema_view(
+    create=extend_schema(responses={201: StudentSerializer, 409: QUOTA_EXCEEDED_RESPONSE})
+)
 class StudentViewSet(TenantModelViewSet):
     """Student master records (module doc §5.1-2)."""
 
@@ -962,7 +972,8 @@ class StudentImportViewSet(TenantScopedViewSetMixin, viewsets.GenericViewSet):
         summary="Bulk-import students from a CSV or .xlsx file",
         request=StudentImportRequestSerializer,
         responses={
-            202: OpenApiResponse(description="{'data': {'job_id': str, 'status': 'queued'}}")
+            202: OpenApiResponse(description="{'data': {'job_id': str, 'status': 'queued'}}"),
+            409: QUOTA_EXCEEDED_RESPONSE,
         },
     )
     def create(self, request, *args, **kwargs) -> Response:
@@ -977,6 +988,12 @@ class StudentImportViewSet(TenantScopedViewSetMixin, viewsets.GenericViewSet):
             raise DomainRuleViolation(
                 {"file": f"Import file exceeds the {_MAX_IMPORT_FILE_BYTES}-byte limit."}
             )
+
+        rows = count_rows(filename=upload.name, data=content)
+        if rows:
+            # Refuse-only, before a job exists: no warning or notice for rows that may never
+            # be created. Each row's create checks again in the job, and advises there.
+            assert_room(request.tenant.pk, "students", adding=rows)
 
         job = create_job(
             tenant_id=request.tenant.pk,

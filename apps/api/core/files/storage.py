@@ -11,16 +11,17 @@ from __future__ import annotations
 
 import datetime
 import functools
+import io
 import uuid
 from dataclasses import dataclass
-from typing import Protocol
+from typing import IO, Protocol
 
 from django.conf import settings
 from django.core.signals import setting_changed
 from django.dispatch import receiver
 
 _UPLOAD_EXPIRY_SECONDS = 900
-_DOWNLOAD_EXPIRY_SECONDS = 300
+DOWNLOAD_EXPIRY_SECONDS = 300
 
 
 @dataclass(frozen=True)
@@ -37,7 +38,7 @@ class Presigner(Protocol):
         self,
         *,
         storage_key: str,
-        expires_in: int = _DOWNLOAD_EXPIRY_SECONDS,
+        expires_in: int = DOWNLOAD_EXPIRY_SECONDS,
         cache_control: str | None = None,
         content_disposition: str | None = None,
     ) -> str: ...
@@ -45,11 +46,19 @@ class Presigner(Protocol):
         """Return {"size_bytes": int} if the object exists, else None."""
         ...
 
-    def put(self, *, storage_key: str, data: bytes, content_type: str) -> None:
+    def put(self, *, storage_key: str, data: bytes | IO[bytes], content_type: str) -> None:
         """Write bytes directly — for server-generated content (exports, ID-card
 
         PDFs) that never goes through the two-step client-upload flow, so
         there is no presigned URL for a client to PUT to in the first place.
+        A file object is streamed (multipart past the threshold), never read whole.
+        """
+        ...
+
+    def open(self, *, storage_key: str) -> IO[bytes]:
+        """A readable stream of a stored object, for a server-side copy (a tenant export).
+
+        Raises ``FileNotFoundError`` when no object has the key.
         """
         ...
 
@@ -80,7 +89,7 @@ class NullPresigner:
         self,
         *,
         storage_key: str,
-        expires_in: int = _DOWNLOAD_EXPIRY_SECONDS,
+        expires_in: int = DOWNLOAD_EXPIRY_SECONDS,
         cache_control: str | None = None,
         content_disposition: str | None = None,
     ) -> str:
@@ -92,8 +101,11 @@ class NullPresigner:
         # size the caller cannot have violated.
         return {"size_bytes": 0}
 
-    def put(self, *, storage_key: str, data: bytes, content_type: str) -> None:
+    def put(self, *, storage_key: str, data: bytes | IO[bytes], content_type: str) -> None:
         pass
+
+    def open(self, *, storage_key: str) -> IO[bytes]:
+        return io.BytesIO(b"")
 
 
 class S3Presigner:
@@ -144,7 +156,7 @@ class S3Presigner:
         self,
         *,
         storage_key: str,
-        expires_in: int = _DOWNLOAD_EXPIRY_SECONDS,
+        expires_in: int = DOWNLOAD_EXPIRY_SECONDS,
         cache_control: str | None = None,
         content_disposition: str | None = None,
     ) -> str:
@@ -172,10 +184,27 @@ class S3Presigner:
             raise
         return {"size_bytes": response["ContentLength"]}
 
-    def put(self, *, storage_key: str, data: bytes, content_type: str) -> None:
-        self._client.put_object(
-            Bucket=self._bucket, Key=storage_key, Body=data, ContentType=content_type
+    def put(self, *, storage_key: str, data: bytes | IO[bytes], content_type: str) -> None:
+        if isinstance(data, bytes):
+            self._client.put_object(
+                Bucket=self._bucket, Key=storage_key, Body=data, ContentType=content_type
+            )
+            return
+        # boto3's managed transfer: multipart past its threshold, so an archive of any size
+        # streams from disk instead of being held in memory.
+        self._client.upload_fileobj(
+            data, self._bucket, storage_key, ExtraArgs={"ContentType": content_type}
         )
+
+    def open(self, *, storage_key: str) -> IO[bytes]:
+        from botocore.exceptions import ClientError
+
+        try:
+            return self._client.get_object(Bucket=self._bucket, Key=storage_key)["Body"]
+        except ClientError as exc:
+            if exc.response.get("Error", {}).get("Code") in {"404", "NoSuchKey"}:
+                raise FileNotFoundError(storage_key) from exc
+            raise
 
 
 _STORAGE_SETTINGS = frozenset(

@@ -1,4 +1,4 @@
-"""Models of the platform console: the plan catalog and each school's subscription.
+"""Models of the platform console: the plan catalog, each school's subscription and usage.
 
 `Plan` is platform scope (no tenant, no RLS): every school reads the same catalog.
 `Subscription` is a school's own row, under RLS like any tenant table, so the platform reads
@@ -10,11 +10,16 @@ write in the same transaction as the row (entities/tenancy.md).
 
 from __future__ import annotations
 
+import uuid
+from decimal import Decimal
+
 from django.conf import settings
 from django.db import models
 from django.db.models import Q
+from django.utils import timezone
 
-from core.tenancy.models import TenantOwnedModel, TimestampedModel
+from core.tenancy.managers import AppendOnlyQuerySet
+from core.tenancy.models import TenantOwnedModel, TenantStatus, TimestampedModel
 from core.tenancy.subscription_state import LIVE_STATES
 
 
@@ -164,3 +169,62 @@ class BillingEventReceipt(TimestampedModel):
 
     def __str__(self) -> str:
         return f"{self.provider}:{self.event_id} ({self.outcome})"
+
+
+class TenantUsageSnapshot(models.Model):
+    """One school's aggregate usage and plan state at one moment: counts, never rows.
+
+    Platform scope (no RLS): the console and the platform reports read it with no school
+    bound (multi-tenancy §8's separate read path). It is written with exactly one school
+    bound, by the nightly `snapshot_all` visit or `:refresh-usage` (`usage/services.py`).
+
+    Append-only, as `AppendOnlyTenantModel` is, minus the tenant RLS: ``save()`` of an
+    existing row, ``delete()`` and the bulk forms raise, and the migration revokes UPDATE and
+    DELETE from the app role (`core.tenancy.grants.PLATFORM_APPEND_ONLY_TABLES`). Retention
+    is not built yet (deferred-work.md).
+    """
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    tenant = models.ForeignKey(
+        "tenancy.Tenant", on_delete=models.PROTECT, related_name="+", db_index=False
+    )
+    taken_at = models.DateTimeField(default=timezone.now)
+    status = models.CharField(max_length=20, choices=TenantStatus.choices)
+    plan_code = models.CharField(
+        max_length=50, blank=True, default="", help_text="The live plan's code; blank for none."
+    )
+    mrr_amount = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        default=Decimal("0"),
+        help_text="The plan's price per month while paying (active or past due); 0 otherwise.",
+    )
+    currency = models.CharField(max_length=3, blank=True, default="")
+    students = models.PositiveIntegerField()
+    staff = models.PositiveIntegerField()
+    storage_bytes = models.PositiveBigIntegerField()
+    impersonations_30d = models.PositiveIntegerField(
+        null=True, blank=True, help_text="Impersonation grants in the last 30 days (PR E)."
+    )
+    modules_enabled = models.JSONField(
+        default=list, blank=True, help_text="The `module.*` keys on for the school."
+    )
+
+    objects = models.Manager.from_queryset(AppendOnlyQuerySet)()
+
+    class Meta:
+        db_table = "tenant_usage_snapshots"
+        indexes = [
+            models.Index(fields=["tenant", "-taken_at"], name="tenant_usage_snapshots_latest"),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.tenant_id} @ {self.taken_at:%Y-%m-%d %H:%M}"
+
+    def save(self, *args, **kwargs):
+        if not self._state.adding:
+            raise RuntimeError("TenantUsageSnapshot rows are append-only: take a new snapshot.")
+        return super().save(*args, **kwargs)
+
+    def delete(self, *args, **kwargs):
+        raise RuntimeError("TenantUsageSnapshot rows cannot be deleted.")

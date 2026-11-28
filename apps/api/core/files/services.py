@@ -10,7 +10,9 @@ can drive the same flow without going through HTTP.
 
 from __future__ import annotations
 
+import io
 import uuid
+from typing import IO
 
 from django.conf import settings
 from django.db import transaction
@@ -21,6 +23,7 @@ from core.files.models import File, FileStatus
 from core.files.purposes import registry as upload_purposes
 from core.files.storage import NullPresigner, get_presigner, storage_key_for
 from core.tenancy.context import tenant_atomic
+from core.tenancy.quotas import check_quota
 
 
 def assert_upload_allowed(*, purpose: str, mime_type: str, size_bytes: int) -> None:
@@ -95,6 +98,8 @@ def create_upload(
 ) -> tuple[File, dict]:
     """Create the pending File row and return it with the presigned upload details."""
     assert_upload_allowed(purpose=purpose, mime_type=mime_type, size_bytes=size_bytes)
+    # A pending upload counts toward storage, so the quota is checked before the row exists.
+    check_quota(tenant_id, "storage_gb", adding=size_bytes)
 
     storage_key = storage_key_for(tenant_id=tenant_id, purpose=purpose, original_name=original_name)
     file = File.objects.create(
@@ -195,10 +200,13 @@ def create_ready_file(
     purpose: str,
     original_name: str,
     mime_type: str,
-    data: bytes,
+    data: bytes | IO[bytes],
     actor_id: uuid.UUID | None,
 ) -> File:
     """Register a server-generated file (a background job's export/report/PDF).
+
+    ``data`` is the bytes, or a seekable file object streamed to storage (an archive too
+    big to hold in memory); its size is read from the stream's end.
 
     ``actor_id`` is ``None`` for system work with no user behind it, e.g. the receipt
     for a payment a gateway callback confirmed.
@@ -214,6 +222,11 @@ def create_ready_file(
     tenant GUC needs re-applying here rather than assumed already set.
     """
     storage_key = storage_key_for(tenant_id=tenant_id, purpose=purpose, original_name=original_name)
+    if isinstance(data, bytes):
+        size_bytes = len(data)
+    else:
+        size_bytes = data.seek(0, io.SEEK_END)
+        data.seek(0)
     get_presigner().put(storage_key=storage_key, data=data, content_type=mime_type)
 
     with tenant_atomic(tenant_id):
@@ -222,7 +235,7 @@ def create_ready_file(
             storage_key=storage_key,
             original_name=original_name,
             mime_type=mime_type,
-            size_bytes=len(data),
+            size_bytes=size_bytes,
             purpose=purpose,
             status=FileStatus.READY,
             created_by=actor_id,

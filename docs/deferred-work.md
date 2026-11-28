@@ -176,6 +176,68 @@ either this file or `project-status.md`.
     trial end of record (the trial-expiry sweep is to read it), so the subscription's
     `current_period_end` is informational until the two are reconciled.
 
+- **Usage snapshots, what platform-admin PR C's Task 6 leaves out** (`apps/api/apps/platform_admin/usage/`,
+  platform-admin §7.7).
+  - **Snapshot retention.** `tenant_usage_snapshots` grows by one row per school per night,
+    plus each `:refresh-usage`, and nothing prunes it. The table is append-only (DELETE is
+    revoked from the app role), so pruning needs a migrator-role job, like the hard purge;
+    a rollup (keep dailies for a quarter, then one per month) is the likely shape.
+  - **The plan check ignores overrides.** Lowering a plan's limit reads every school on the
+    plan, not each school's `limits_override`, so a school whose override shields it can still
+    make the edit ask for the acknowledgement.
+  - **`sms_credits` and `ai_tokens` have no counter,** so neither is snapshotted nor checked.
+  - **Stale snapshots.** The over-usage check and the reports are as fresh as the last
+    snapshot (nightly, or `:refresh-usage`); a school that grew today is not yet seen.
+  - **`modules_enabled` costs a query per module per school** on a cold feature cache: each
+    snapshot asks `is_feature_enabled` for every registered `module.*` key. Fine nightly; a
+    bulk resolver is the fix if the school count makes the run slow.
+  - **Pending uploads ratchet storage.** The counter sums every non-deleted file, `pending`
+    included, so an upload that is never confirmed keeps counting toward `storage_gb` (and
+    its quota) until something removes the row; nothing sweeps abandoned pending files yet.
+
+- **Quotas, what platform-admin PR C's Task 7 leaves out** (`apps/api/core/tenancy/quotas.py`,
+  platform-admin §7.8).
+  - **SMS-credit, AI-token and API-rate quotas.** Only `students`, `staff` and `storage_gb` are
+    enforced; the others have no counter (the AI gateway keeps its own per-school budget).
+  - **Platform-ops copies of `platform.quota-threshold`.** Owners only; `it_admin` and the
+    platform-ops channel of §12 wait for that channel.
+  - **Two `meta.warnings` entry shapes.** `quota_warning` is `{code, message, details}`;
+    academics' older `teacher_over_norm` puts its fields beside `code`. `ApiMeta.warnings`
+    stays untyped until `teacher_over_norm` moves to the shared shape (or the type becomes a
+    union on `code`); clients read each entry by `code` meanwhile.
+  - **A notice for a school already over its limit.** The notice fires on a crossing made by a
+    create; a school pushed over by a lowered, acknowledged limit is told nothing until it next
+    crosses a band in a new period.
+  - **Server-generated files.** `create_ready_file` (exports, receipts, ID cards) is not
+    checked: refusing a receipt would break a payment. A restore or re-activation path for a
+    student or staff member, when one is built, must call `check_quota` too.
+
+- **Reports and `:export`, what platform-admin PR C's Task 8 leaves out**
+  (`apps/api/apps/platform_admin/reports/`, `export/`, platform-admin §7.9, §13).
+  - **Hard purge and the certificate of deletion.** A deprovisioned school past
+    `deprovision_after` keeps every row and file. Append-only tables (the ledgers, the audit
+    log, `tenant_usage_snapshots`) revoke `DELETE` from the app role, so a purge needs a
+    migrator-role job and its own ADR; the certificate of deletion (§6) is issued by that job.
+  - **Legacy-data migration imports** (§5 item 7, `POST /platform/tenants/{id}/imports`,
+    `platform.migration.import`). Schools have the student and staff importers already;
+    guardians, fee balances and marks history get their own plan.
+  - **No school-side export request.** Only an operator starts `:export`; multi-tenancy §7 also
+    lets a school's own admins request one (a tenant route and key).
+  - **Export size bounds.** The whole archive is written to the worker's temporary disk, so
+    that disk must hold the largest school's export. `create_ready_file` does not enforce the
+    purpose's 50 GiB `max_size_bytes`, so nothing stops a larger archive.
+  - **SEC-16's per-user export throttle.** `:export` has none; the in-flight dedupe (one export
+    per school at a time) keeps the risk low.
+  - **Export archives are never pruned.**
+  - **Report gaps against §13.** Time-to-active, dunning recovery rate, SMS and AI-token
+    consumption, and the "support & health" report (impersonation counts, job-failure rates,
+    onboarding funnel) are not built: they need data no snapshot holds yet. Quota pressure
+    reads plan limits only, not a school's `limits_override` (under its RLS boundary). Churn
+    is dated from `deprovision_after - PLATFORM_RETENTION_DAYS`, so a changed retention
+    setting shifts past months. Scheduled report delivery (§13) is not built. The revenue report's `paying_tenants`
+    counts past-due schools too (documented in platform-admin §7.9 rather than renamed, so the
+    console's column keeps its name); a `billed_tenants` rename is open if it misleads.
+
 - **AI gateway and AI-FEE-02 follow-ups** (`feat/ai-gateway`, plan
   `docs/superpowers/plans/2026-11-07-ai-gateway.md`, [ADR-0035](decisions/0035-ai-gateway-shape.md)).
   The gateway and the on-demand finance report summary shipped backend only. Left out on purpose:

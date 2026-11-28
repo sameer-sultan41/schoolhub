@@ -9,8 +9,11 @@ from django.urls import include, path
 
 urlpatterns = [
     path("", include("apps.platform_admin.billing.urls")),
+    path("", include("apps.platform_admin.export.urls")),
     path("", include("apps.platform_admin.flags.urls")),
     path("", include("apps.platform_admin.plans.urls")),
+    path("", include("apps.platform_admin.reports.urls")),
     path("", include("apps.platform_admin.subscriptions.urls")),
     path("", include("apps.platform_admin.tenants.urls")),
+    path("", include("apps.platform_admin.usage.urls")),
 ]

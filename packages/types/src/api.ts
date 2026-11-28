@@ -179,6 +179,14 @@ export const API_ERROR_CODES = [
   // The feature-flag console (apps/api/apps/platform_admin/flags): a disable the school still
   // needs (a registered guard objects), or an override switching a kill switch on (409).
   "toggle_refused",
+  // Lowering a plan's limit, a school's negotiated limit (subscription override), a `:change-plan` or
+  // a paid sign-up (`:activate` on a school with no plan) below a school's latest usage snapshot
+  // without `acknowledge_over_usage` (409; apps/api/apps/platform_admin/usage/limits.py, each
+  // breach in `meta.over_usage`).
+  "limit_below_usage",
+  // A create that would take a school past its plan's students, staff or storage limit (409;
+  // apps/api/core/tenancy/quotas.py, `meta` is `{metric, limit, usage, adding}`).
+  "quota_exceeded",
   // Synthesised by this client when the request never produced an envelope.
   "network_error",
   "server_error",

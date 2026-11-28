@@ -39,15 +39,22 @@ _CONFLICT = OpenApiResponse(
     description="invalid_transition: the subscription's status does not allow this move; "
     "no_live_subscription: the school has none."
 )
+_UPDATE_CONFLICT = OpenApiResponse(
+    description="invalid_transition: the subscription's status does not allow this move; "
+    "no_live_subscription: the school has none; limit_below_usage: a limit would drop below "
+    "the school's latest usage (`meta.over_usage`)."
+)
 _PLAN_CONFLICT = OpenApiResponse(
     description="invalid_transition: the subscription's status does not allow this move; "
     "no_live_subscription: the school has none; toggle_refused: the plan would switch off a "
-    "module the school still needs."
+    "module the school still needs; limit_below_usage: a limit would drop below the school's "
+    "latest usage (`meta.over_usage`)."
 )
 _ACTIVATE_CONFLICT = OpenApiResponse(
     description="invalid_transition: the subscription's status does not allow this move; "
     "subscription_exists: the school already has a live subscription; toggle_refused: the "
-    "plan would switch off a module the school still needs."
+    "plan would switch off a module the school still needs; limit_below_usage: a paid sign-up "
+    "onto a plan whose limits are below the school's usage, without acknowledge_over_usage."
 )
 _UPDATE = "platform.subscription.update"
 
@@ -74,16 +81,21 @@ class TenantSubscriptionViewSet(PlatformTenantNestedMixin, PlatformViewSet):
     @extend_schema(
         summary="Set the billing provider, its reference or negotiated limits",
         request=SubscriptionUpdateSerializer,
-        responses={200: SubscriptionStateSerializer, 409: _CONFLICT},
+        responses={200: SubscriptionStateSerializer, 409: _UPDATE_CONFLICT},
     )
     def partial_update(self, request: Request, tenant_pk=None) -> Response:
         payload = SubscriptionUpdateSerializer(data=request.data)
         payload.is_valid(raise_exception=True)
+        fields = dict(payload.validated_data)
+        acknowledged = fields.pop("acknowledge_over_usage")
         return self._act(
             request,
             "update",
             lambda sub: services.update_subscription(
-                self._live(sub), data=payload.validated_data, actor_id=request.user.pk
+                self._live(sub),
+                data=fields,
+                actor_id=request.user.pk,
+                acknowledge_over_usage=acknowledged,
             ),
             message="Subscription updated.",
         )
@@ -111,7 +123,13 @@ class TenantSubscriptionViewSet(PlatformTenantNestedMixin, PlatformViewSet):
             if sub is None:
                 if not code:
                     raise serializers.ValidationError({"plan_code": [PLAN_REQUIRED]})
-                return services.subscribe(request.tenant, code, **period, actor_id=request.user.pk)
+                return services.subscribe(
+                    request.tenant,
+                    code,
+                    **period,
+                    actor_id=request.user.pk,
+                    acknowledge_over_usage=data["acknowledge_over_usage"],
+                )
             if code and code != sub.plan.code:
                 raise serializers.ValidationError({"plan_code": [USE_CHANGE_PLAN]})
             return services.activate(sub, **period, actor_id=request.user.pk)
@@ -162,10 +180,16 @@ class TenantSubscriptionViewSet(PlatformTenantNestedMixin, PlatformViewSet):
         payload = SubscriptionChangePlanSerializer(data=request.data)
         payload.is_valid(raise_exception=True)
         code = payload.validated_data["plan_code"]
+        acknowledged = payload.validated_data["acknowledge_over_usage"]
         return self._idempotent(
             request,
             "change_plan",
-            lambda sub: services.change_plan(self._live(sub), code, actor_id=request.user.pk),
+            lambda sub: services.change_plan(
+                self._live(sub),
+                code,
+                actor_id=request.user.pk,
+                acknowledge_over_usage=acknowledged,
+            ),
             message="Plan changed.",
         )
 

@@ -25,6 +25,15 @@ from django.db import migrations
 
 APP_ROLE = "schoolhub_app"
 
+#: Platform-scope append-only tables, to their mutable columns. These have no tenant base
+#: class for ``append_only_tables()`` to derive them from, so they are named here; a name is
+#: not an import, so ``core`` still never imports an app (ADR-0013).
+#: ``tests/test_append_only_coverage.py`` checks each name is a real table.
+PLATFORM_APPEND_ONLY_TABLES: dict[str, frozenset[str]] = {
+    # apps.platform_admin.TenantUsageSnapshot: one school's usage at one moment.
+    "tenant_usage_snapshots": frozenset(),
+}
+
 _REVOKE = """
 REVOKE UPDATE, DELETE ON TABLE {table} FROM PUBLIC;
 DO $$
@@ -106,7 +115,7 @@ def append_only_tables() -> dict[str, frozenset[str]]:
 
     Derived from the models at call time, the same way
     ``core.tenancy.rls.tenant_owned_tables()`` is, so a new append-only model
-    cannot be forgotten.
+    cannot be forgotten, plus the platform tables in ``PLATFORM_APPEND_ONLY_TABLES``.
 
     The allowance is resolved through ``_meta.get_field(name).column``, not
     used as a bare field name. ``MUTABLE_FIELDS`` names a Python attribute and
@@ -123,7 +132,7 @@ def append_only_tables() -> dict[str, frozenset[str]]:
 
     from core.tenancy.models import AppendOnlyTenantModel
 
-    tables: dict[str, frozenset[str]] = {}
+    tables: dict[str, frozenset[str]] = dict(PLATFORM_APPEND_ONLY_TABLES)
     for model in apps.get_models():
         if not (issubclass(model, AppendOnlyTenantModel) and not model._meta.abstract):
             continue

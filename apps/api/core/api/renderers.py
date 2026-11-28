@@ -6,6 +6,8 @@ core.api.exceptions. See docs/02-architecture/api-architecture.md §2.3.
 
 from rest_framework.renderers import JSONRenderer
 
+from core.api.warnings import response_warnings
+
 
 def _is_error_envelope(data: dict) -> bool:
     """True only for a real `envelope_exception_handler` payload.
@@ -57,6 +59,10 @@ class EnvelopeJSONRenderer(JSONRenderer):
             request_id = getattr(request, "request_id", None)
             if request_id:
                 meta["request_id"] = request_id
+            warnings = response_warnings()
+            if warnings and response is not None and 200 <= response.status_code < 300:
+                # A view may already have put its own there (teacher allocations' load warnings).
+                meta["warnings"] = [*meta.get("warnings", []), *warnings]
             if response is not None and not meta:
                 payload.pop("meta")
 

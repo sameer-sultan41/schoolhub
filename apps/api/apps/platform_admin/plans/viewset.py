@@ -48,7 +48,10 @@ class PlanViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, PlatformView
     def create(self, request: Request) -> Response:
         payload = PlanWriteSerializer(data=request.data)
         payload.is_valid(raise_exception=True)
-        plan = services.create_plan(data=payload.validated_data, actor_id=request.user.pk)
+        fields = dict(payload.validated_data)
+        # Nothing to be below on a new plan: no school is on it yet.
+        fields.pop("acknowledge_over_usage", None)
+        plan = services.create_plan(data=fields, actor_id=request.user.pk)
         data = PlanSerializer(plan).data
         record_audit(request, "create", plan, after=data)
         return ActionResponse.ok(data, message="Plan created.", status=201)
@@ -56,14 +59,24 @@ class PlanViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, PlatformView
     @extend_schema(
         summary="Edit a plan (its code is fixed); module access follows at once",
         request=PlanWriteSerializer,
-        responses={200: PlanSerializer},
+        responses={
+            200: PlanSerializer,
+            409: OpenApiResponse(
+                description="limit_below_usage: a limit would drop below a school's latest "
+                "usage; `meta.over_usage` lists each school and metric."
+            ),
+        },
     )
     def partial_update(self, request: Request, pk=None) -> Response:
         plan = self.get_object()
         payload = PlanWriteSerializer(plan, data=request.data, partial=True)
         payload.is_valid(raise_exception=True)
         before = PlanSerializer(plan).data
-        plan = services.update_plan(plan, data=payload.validated_data, actor_id=request.user.pk)
+        fields = dict(payload.validated_data)
+        acknowledged = fields.pop("acknowledge_over_usage", False)
+        plan = services.update_plan(
+            plan, data=fields, actor_id=request.user.pk, acknowledge_over_usage=acknowledged
+        )
         after = PlanSerializer(plan).data
         record_audit(request, "update", plan, before=before, after=after)
         return ActionResponse.ok(after, message="Plan updated.")

@@ -133,6 +133,8 @@ MIDDLEWARE = [
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
     # Assigns X-Request-ID and binds it to logs.
     "core.api.middleware.RequestIDMiddleware",
+    # Collects the request's `meta.warnings` (core.api.warnings).
+    "core.api.warnings.ResponseWarningsMiddleware",
     # Resolves the tenant from the authenticated principal and sets app.tenant_id
     # for the transaction, which is what the RLS policies read.
     "core.tenancy.middleware.TenantMiddleware",
@@ -298,6 +300,9 @@ SPECTACULAR_SETTINGS = {
     "ENUM_ADD_EXPLICIT_BLANK_NULL_CHOICE": False,
     "ENUM_NAME_OVERRIDES": {
         "PromotionDecisionEnum": "apps.academics.models.PromotionDecision",
+        # A job's `status`, in `GET /jobs/{id}` and the console's job poll alike: pinned to
+        # the name the first component gave it, so a second one does not rename it.
+        "BackgroundJobStatusEnum": "core.jobs.models.JobStatus",
         # One name for the batch summary's `status` and the decision rows' `status`.
         "PromotionStatusEnum": "apps.academics.models.PromotionStatus",
         # A plain list of tuples, per drf-spectacular's own FAQ: the two document
@@ -511,8 +516,12 @@ CELERY_TASK_ROUTES = {
     "apps.platform_admin.tasks.expire_trials": {"queue": "bulk"},
     "apps.platform_admin.tasks.dunning_sweep": {"queue": "bulk"},
     "apps.platform_admin.tasks.lapse_overrides": {"queue": "bulk"},
+    "apps.platform_admin.tasks.snapshot_all": {"queue": "bulk"},
+    # A whole school zipped to storage: the heaviest platform job, and nobody watches it.
+    "apps.platform_admin.tasks.export_tenant": {"queue": "bulk"},
     "apps.platform_admin.tasks.send_trial_expiring_notice": {"queue": "transactional"},
     "apps.platform_admin.tasks.send_payment_failed_notice": {"queue": "transactional"},
+    "apps.platform_admin.tasks.send_quota_threshold_notice": {"queue": "transactional"},
 }
 # An unrouted task goes to a queue the workers consume. Celery's own default, "celery",
 # is consumed by nothing here, so an unrouted task would wait on it forever.
@@ -616,6 +625,12 @@ CELERY_BEAT_SCHEDULE = {
         "task": "apps.platform_admin.tasks.lapse_overrides",
         "schedule": crontab(minute="23"),
     },
+    # After expiry and dunning, so tonight's snapshot records tonight's suspensions; the
+    # platform reports and the quota check read it.
+    "platform-usage-snapshot": {
+        "task": "apps.platform_admin.tasks.snapshot_all",
+        "schedule": crontab(hour="2", minute="50"),
+    },
 }
 
 # The AI gateway (core/ai). The API key is server-side only and never leaves the backend
@@ -647,11 +662,14 @@ PLATFORM_DUNNING_GRACE_DAYS = env.int("PLATFORM_DUNNING_GRACE_DAYS", default=14)
 # Days a deprovisioned school's data is kept, restorable, before purge.
 PLATFORM_RETENTION_DAYS = env.int("PLATFORM_RETENTION_DAYS", default=90)
 # Usage share of a plan limit from which responses carry a quota warning.
-PLATFORM_QUOTA_WARN_RATIO = env.float("PLATFORM_QUOTA_WARN_RATIO", default=0.9)
+PLATFORM_QUOTA_WARN_RATIO = env.float("PLATFORM_QUOTA_WARN_RATIO", default=0.8)
 # Longest impersonation grant an operator may request.
 PLATFORM_IMPERSONATION_MAX_MINUTES = env.int("PLATFORM_IMPERSONATION_MAX_MINUTES", default=60)
 # Lifetime of the single-use code that hands an impersonation session to the dashboard.
 PLATFORM_HANDOFF_CODE_TTL_SECONDS = env.int("PLATFORM_HANDOFF_CODE_TTL_SECONDS", default=120)
+# Hard time limit of a tenant export (`export_tenant`); its soft limit is a minute earlier. A
+# job in flight longer than this is treated as lost, failed, and replaced by the next `:export`.
+PLATFORM_EXPORT_TIME_LIMIT_SECONDS = env.int("PLATFORM_EXPORT_TIME_LIMIT_SECONDS", default=14400)
 # Shared secret of the billing provider's webhook. Empty = the webhook answers 503.
 PLATFORM_BILLING_WEBHOOK_SECRET = env("PLATFORM_BILLING_WEBHOOK_SECRET", default="")
 # Billing providers whose webhook is accepted (apps/platform_admin/billing). Empty by default,

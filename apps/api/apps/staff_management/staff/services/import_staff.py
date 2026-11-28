@@ -20,6 +20,7 @@ from apps.staff_management.staff.services.create import create_staff
 from core.api.exceptions import DomainRuleViolation
 from core.imports.tabular import ROW_NUMBER_KEY
 from core.tenancy.context import tenant_atomic
+from core.tenancy.quotas import QuotaExceeded
 
 if TYPE_CHECKING:
     from apps.school_organization.models import Campus
@@ -143,6 +144,9 @@ def import_staff_row(
             field, issue = next(iter(detail.items()))
             return error(str(field), str(issue))
         return error("non_field", str(detail))
+    except QuotaExceeded as exc:
+        # Another create used the place since the upload's check: this row is refused.
+        return error("non_field", str(exc.detail))
     except IntegrityError:
         return error("non_field", "This row conflicts with existing data.")
     except DataError:

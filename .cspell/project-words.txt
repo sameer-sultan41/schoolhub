@@ -129,6 +129,7 @@ libpango
 libpangoft
 libpq
 linkedunion
+locktype
 Mahnoor
 Mailpit
 manylinux

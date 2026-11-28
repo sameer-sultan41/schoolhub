@@ -146,6 +146,26 @@ Relationships: N:1 `tenants`, `feature_flags`.
 
 Indexes: unique(provider, event_id).
 
+### tenant_usage_snapshots
+**Platform scope — no RLS, append-only.** One school's aggregate usage and plan state at one moment (platform-admin §7.7): counts and metrics, never a row of school data. Written with that one school bound (the nightly `snapshot_all` visit or `:refresh-usage`); read with nothing bound by the console, the platform reports and the over-usage check (multi-tenancy §8). The app role has UPDATE and DELETE revoked.
+
+| Column | Type | Null | Default | Notes |
+| ------ | ---- | ---- | ------- | ----- |
+| id | uuid | no | — | PK |
+| tenant_id | uuid | no | — | FK → tenants (`PROTECT`) |
+| taken_at | timestamptz | no | now | |
+| status | varchar(20) | no | — | The school's lifecycle status then |
+| plan_code | varchar(50) | no | '' | The live plan's code; blank for none |
+| mrr_amount | decimal(12,2) | no | 0 | The plan's price per month while `active` or `past_due`; 0 otherwise |
+| currency | char(3) | no | '' | The plan's currency |
+| students | integer | no | — | Students not withdrawn, graduated, transferred or soft-deleted |
+| staff | integer | no | — | Staff not resigned, retired, terminated or soft-deleted |
+| storage_bytes | bigint | no | — | Sum of the school's non-deleted `files.size_bytes` |
+| impersonations_30d | integer | yes | — | Filled by impersonation (PR E); null until then |
+| modules_enabled | jsonb | no | [] | The `module.*` keys on for the school |
+
+Indexes: (tenant_id, taken_at DESC). Retention is not built yet (deferred-work.md).
+
 ### custom_domains
 A tenant's custom domain(s) for its public website (multi-tenancy §4; bound via website-cms).
 
@@ -377,4 +397,4 @@ Relationships: N:1 `saved_reports`; executions recorded as `background_jobs`.
 
 - `tenants` 1:1 `tenant_settings`; 1:N `subscriptions` (one live), `custom_domains`, `tenant_feature_overrides`, `users` (nullable for platform staff).
 - Identity: `users` N:M `roles` via `user_roles` (with record scope); `roles` N:M `permissions` via `role_permissions`.
-- Platform-scope tables (`tenants`, `plans`, `feature_flags`, `billing_event_receipts`, `permissions`, plus `themes` in [`website-cms.md`](website-cms.md)) carry no `tenant_id` and are exempt from RLS; every other table here participates in the RLS policy from [`multi-tenancy.md`](../../02-architecture/multi-tenancy.md) §3.
+- Platform-scope tables (`tenants`, `plans`, `feature_flags`, `billing_event_receipts`, `tenant_usage_snapshots`, `permissions`, plus `themes` in [`website-cms.md`](website-cms.md)) are exempt from RLS. None carries a `tenant_id` scoping column except `tenant_usage_snapshots`, whose `tenant_id` names the school a row describes and is not an RLS key; every other table here participates in the RLS policy from [`multi-tenancy.md`](../../02-architecture/multi-tenancy.md) §3.

@@ -65,6 +65,15 @@ class EmploymentStatus(models.TextChoices):
     TERMINATED = "terminated", "Terminated"
 
 
+#: The statuses of staff who have left (the spec's "exited"): one list, shared by the exit flow,
+#: invitation eligibility and the platform console's staff counter.
+EXITED_EMPLOYMENT_STATUSES = (
+    EmploymentStatus.RESIGNED,
+    EmploymentStatus.RETIRED,
+    EmploymentStatus.TERMINATED,
+)
+
+
 class QualificationType(models.TextChoices):
     DEGREE = "degree", "Degree"
     DIPLOMA = "diploma", "Diploma"

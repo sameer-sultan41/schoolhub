@@ -4249,6 +4249,36 @@ export interface paths {
         patch: operations["platform_plans_partial_update"];
         trace?: never;
     };
+    "/api/v1/platform/reports/{key}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * A platform report: tenant-overview, revenue or usage
+         * @description A platform console viewset. Declare ``required_permission`` and ``required_permission_map``.
+         *
+         *     Gates, in order:
+         *     - ``IsAuthenticated``: anonymous callers get a 401.
+         *     - ``IsPlatformPrincipal``: a tenant principal gets a 404, and a platform token without
+         *       ``"otp"`` in its ``amr`` gets a 403 ``mfa_required``.
+         *     - ``HasPermissionKey``: a platform user without the route's key gets a 403.
+         *
+         *     No tenant is bound, so a route here reads platform tables only (``tenants``, ``plans``).
+         *     One that reads or writes a school's own rows is nested under its tenant through
+         *     `PlatformTenantNestedMixin`, which binds that one school.
+         */
+        get: operations["platform_reports_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/platform/tenants": {
         parameters: {
             query?: never;
@@ -4327,6 +4357,70 @@ export interface paths {
          * @description `GET/POST .../tenants/{tenant_pk}/feature-overrides`, `DELETE .../{id}`.
          */
         delete: operations["platform_tenants_feature_overrides_destroy"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/platform/tenants/{tenant_pk}/jobs/{job_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Poll one of the school's platform jobs
+         * @description Binds the target school of a ``.../tenants/<tenant_pk>/...`` route for the whole request.
+         *
+         *     **One target tenant per platform request.** ``initial()`` loads the tenant named by the
+         *     ``tenant_pk`` URL kwarg (404 if there is none), binds it the way
+         *     `core.api.viewsets.TenantScopedViewSetMixin` binds the caller's own, and sets
+         *     ``request.tenant``, so `record_audit` attributes each row to it. Under
+         *     ``ATOMIC_REQUESTS`` the binding's ``SET LOCAL`` lasts the whole request: reads and writes
+         *     alike see that school's rows and no other's.
+         *
+         *     The tenant is loaded only after authentication and the permission checks have passed, so
+         *     an unknown id answers 401, 404 or 403 exactly as a known one does, and is no oracle.
+         *
+         *     List it before `PlatformViewSet`: ``class X(PlatformTenantNestedMixin, PlatformViewSet)``.
+         */
+        get: operations["platform_tenants_jobs_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/platform/tenants/{tenant_pk}/jobs/{job_id}:download": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * A signed link to a finished export's archive (audited)
+         * @description Binds the target school of a ``.../tenants/<tenant_pk>/...`` route for the whole request.
+         *
+         *     **One target tenant per platform request.** ``initial()`` loads the tenant named by the
+         *     ``tenant_pk`` URL kwarg (404 if there is none), binds it the way
+         *     `core.api.viewsets.TenantScopedViewSetMixin` binds the caller's own, and sets
+         *     ``request.tenant``, so `record_audit` attributes each row to it. Under
+         *     ``ATOMIC_REQUESTS`` the binding's ``SET LOCAL`` lasts the whole request: reads and writes
+         *     alike see that school's rows and no other's.
+         *
+         *     The tenant is loaded only after authentication and the permission checks have passed, so
+         *     an unknown id answers 401, 404 or 403 exactly as a known one does, and is no oracle.
+         *
+         *     List it before `PlatformViewSet`: ``class X(PlatformTenantNestedMixin, PlatformViewSet)``.
+         */
+        post: operations["platform_tenants_jobs_:download_create"];
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -4442,6 +4536,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/platform/tenants/{tenant_pk}/usage": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * A school's latest usage snapshot and its effective limits
+         * @description `GET .../tenants/{tenant_pk}/usage` and `POST .../tenants/{tenant_pk}:refresh-usage`.
+         */
+        get: operations["platform_tenants_usage_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/platform/tenants/{tenant_pk}:delete": {
         parameters: {
             query?: never;
@@ -4462,6 +4576,38 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/platform/tenants/{tenant_pk}:export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Export the school's data and files (a job; poll .../jobs/{job_id})
+         * @description Binds the target school of a ``.../tenants/<tenant_pk>/...`` route for the whole request.
+         *
+         *     **One target tenant per platform request.** ``initial()`` loads the tenant named by the
+         *     ``tenant_pk`` URL kwarg (404 if there is none), binds it the way
+         *     `core.api.viewsets.TenantScopedViewSetMixin` binds the caller's own, and sets
+         *     ``request.tenant``, so `record_audit` attributes each row to it. Under
+         *     ``ATOMIC_REQUESTS`` the binding's ``SET LOCAL`` lasts the whole request: reads and writes
+         *     alike see that school's rows and no other's.
+         *
+         *     The tenant is loaded only after authentication and the permission checks have passed, so
+         *     an unknown id answers 401, 404 or 403 exactly as a known one does, and is no oracle.
+         *
+         *     List it before `PlatformViewSet`: ``class X(PlatformTenantNestedMixin, PlatformViewSet)``.
+         */
+        post: operations["platform_tenants_:export_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/platform/tenants/{tenant_pk}:provision": {
         parameters: {
             query?: never;
@@ -4476,6 +4622,26 @@ export interface paths {
          * @description `GET/PATCH /platform/tenants/{tenant_pk}` and its lifecycle colon-actions.
          */
         post: operations["platform_tenants_:provision_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/platform/tenants/{tenant_pk}:refresh-usage": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Take a usage snapshot of the school now
+         * @description `GET .../tenants/{tenant_pk}/usage` and `POST .../tenants/{tenant_pk}:refresh-usage`.
+         */
+        post: operations["platform_tenants_:refresh_usage_create"];
         delete?: never;
         options?: never;
         head?: never;
@@ -8757,6 +8923,21 @@ export interface components {
          * @enum {string}
          */
         ExpenseStatusEnum: "draft" | "submitted" | "approved" | "paid" | "rejected" | "reversed";
+        ExportAccepted: {
+            /**
+             * Format: uuid
+             * @description Poll .../tenants/{tenant_pk}/jobs/{job_id}.
+             */
+            job_id: string;
+            /** @description queued, or the status of the export in flight. */
+            status: string;
+        };
+        ExportDownload: {
+            /** @description A signed link to the archive. */
+            download_url: string;
+            /** @description Seconds the link stays valid. */
+            expires_in: number;
+        };
         FeatureFlag: {
             /** Format: uuid */
             readonly id: string;
@@ -11837,7 +12018,7 @@ export interface components {
             };
             /** @description Inactive plans take no new subscriber. */
             is_active?: boolean;
-            /** @description Lower a limit below a school's current usage anyway (checked from PR C). */
+            /** @description Lower a limit below a school's latest usage snapshot anyway; without it that is a 409 limit_below_usage. */
             acknowledge_over_usage?: boolean;
         };
         /**
@@ -12255,6 +12436,11 @@ export interface components {
             limits_override?: {
                 [key: string]: number | null;
             } | null;
+            /**
+             * @description Lower a limit below the school's latest usage snapshot anyway; without it that is a 409 limit_below_usage.
+             * @default false
+             */
+            acknowledge_over_usage: boolean;
         };
         PatchedTeacherAllocation: {
             /** Format: uuid */
@@ -12534,8 +12720,20 @@ export interface components {
             };
             /** @description Inactive plans take no new subscriber. */
             is_active?: boolean;
-            /** @description Lower a limit below a school's current usage anyway (checked from PR C). */
+            /** @description Lower a limit below a school's latest usage snapshot anyway; without it that is a 409 limit_below_usage. */
             acknowledge_over_usage?: boolean;
+        };
+        PlatformReport: {
+            key: string;
+            title: string;
+            /** Format: date-time */
+            generated_at: string;
+            /** @description Named tables; every row of a section has the same keys (platform-admin §7.9). */
+            sections: {
+                [key: string]: {
+                    [key: string]: unknown;
+                }[];
+            };
         };
         PortalChild: {
             student: components["schemas"]["PortalStudent"];
@@ -14079,9 +14277,19 @@ export interface components {
              * @description After the start.
              */
             current_period_end: string;
+            /**
+             * @description A paid sign-up onto a plan whose limits are below the school's latest usage snapshot goes ahead anyway; without it that is a 409 limit_below_usage.
+             * @default false
+             */
+            acknowledge_over_usage: boolean;
         };
         SubscriptionChangePlan: {
             plan_code: string;
+            /**
+             * @description Move to a plan whose limits sit below the school's latest usage snapshot anyway; without it that is a 409 limit_below_usage.
+             * @default false
+             */
+            acknowledge_over_usage: boolean;
         };
         SubscriptionPayment: {
             /**
@@ -14318,6 +14526,35 @@ export interface components {
             readonly name: string;
             /** @description Wildcard subdomain label. */
             readonly slug: string;
+        };
+        /** @description The school's latest snapshot (null before its first) and its effective limits. */
+        TenantUsage: {
+            readonly snapshot: components["schemas"]["TenantUsageSnapshot"] | null;
+            /** @description Every quota metric's effective limit; null is unlimited. `storage_gb` is GiB. */
+            readonly limits: {
+                [key: string]: number | null;
+            };
+        };
+        TenantUsageSnapshot: {
+            /** Format: uuid */
+            readonly id: string;
+            /** Format: date-time */
+            readonly taken_at: string;
+            readonly status: components["schemas"]["TenantStatusEnum"];
+            /** @description The live plan's code; blank for none. */
+            readonly plan_code: string;
+            /**
+             * Format: decimal
+             * @description The plan's price per month while paying (active or past due); 0 otherwise.
+             */
+            readonly mrr_amount: string;
+            readonly currency: string;
+            readonly students: number;
+            readonly staff: number;
+            readonly storage_bytes: number;
+            /** @description Impersonation grants in the last 30 days (PR E). */
+            readonly impersonations_30d: number | null;
+            readonly modules_enabled: string[];
         };
         Term: {
             /** Format: uuid */
@@ -18601,6 +18838,13 @@ export interface operations {
                     "application/json": components["schemas"]["File"];
                 };
             };
+            /** @description quota_exceeded: the school's plan limit would be passed (`meta` {metric, limit, usage, adding}). */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
             /** @description A portal user asked for a staff-only purpose */
             422: {
                 headers: {
@@ -21601,6 +21845,44 @@ export interface operations {
                     "application/json": components["schemas"]["Plan"];
                 };
             };
+            /** @description limit_below_usage: a limit would drop below a school's latest usage; `meta.over_usage` lists each school and metric. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    platform_reports_retrieve: {
+        parameters: {
+            query?: {
+                format?: "csv" | "json" | "xlsx";
+            };
+            header?: never;
+            path: {
+                key: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description JSON (the default); CSV or XLSX answer the sections as one table with a leading `section` column, as an attachment. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlatformReport"];
+                };
+            };
+            /** @description An unknown report key. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
         };
     };
     platform_tenants_list: {
@@ -21803,6 +22085,57 @@ export interface operations {
             };
         };
     };
+    platform_tenants_jobs_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                job_id: string;
+                tenant_pk: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BackgroundJob"];
+                };
+            };
+        };
+    };
+    "platform_tenants_jobs_:download_create": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                job_id: string;
+                tenant_pk: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExportDownload"];
+                };
+            };
+            /** @description conflict: the job has not succeeded. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     platform_tenants_subscription_retrieve: {
         parameters: {
             query?: never;
@@ -21849,7 +22182,7 @@ export interface operations {
                     "application/json": components["schemas"]["SubscriptionState"];
                 };
             };
-            /** @description invalid_transition: the subscription's status does not allow this move; no_live_subscription: the school has none. */
+            /** @description invalid_transition: the subscription's status does not allow this move; no_live_subscription: the school has none; limit_below_usage: a limit would drop below the school's latest usage (`meta.over_usage`). */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -21883,7 +22216,7 @@ export interface operations {
                     "application/json": components["schemas"]["SubscriptionState"];
                 };
             };
-            /** @description invalid_transition: the subscription's status does not allow this move; subscription_exists: the school already has a live subscription; toggle_refused: the plan would switch off a module the school still needs. */
+            /** @description invalid_transition: the subscription's status does not allow this move; subscription_exists: the school already has a live subscription; toggle_refused: the plan would switch off a module the school still needs; limit_below_usage: a paid sign-up onto a plan whose limits are below the school's usage, without acknowledge_over_usage. */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -21924,7 +22257,7 @@ export interface operations {
                     "application/json": components["schemas"]["SubscriptionState"];
                 };
             };
-            /** @description invalid_transition: the subscription's status does not allow this move; no_live_subscription: the school has none; toggle_refused: the plan would switch off a module the school still needs. */
+            /** @description invalid_transition: the subscription's status does not allow this move; no_live_subscription: the school has none; toggle_refused: the plan would switch off a module the school still needs; limit_below_usage: a limit would drop below the school's latest usage (`meta.over_usage`). */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -22002,6 +22335,27 @@ export interface operations {
             };
         };
     };
+    platform_tenants_usage_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tenant_pk: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TenantUsage"];
+                };
+            };
+        };
+    };
     "platform_tenants_:delete_create": {
         parameters: {
             query?: never;
@@ -22033,6 +22387,28 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+        };
+    };
+    "platform_tenants_:export_create": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tenant_pk: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description An export already queued or running is answered instead of a new one; one in flight past PLATFORM_EXPORT_TIME_LIMIT_SECONDS is failed and replaced. */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExportAccepted"];
+                };
             };
         };
     };
@@ -22074,6 +22450,27 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+        };
+    };
+    "platform_tenants_:refresh_usage_create": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tenant_pk: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TenantUsage"];
+                };
             };
         };
     };
@@ -23734,6 +24131,13 @@ export interface operations {
                     "application/json": components["schemas"]["Staff"];
                 };
             };
+            /** @description quota_exceeded: the school's plan limit would be passed (`meta` {metric, limit, usage, adding}). */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
         };
     };
     staff_attendance_list: {
@@ -23991,6 +24395,13 @@ export interface operations {
         responses: {
             /** @description {'data': {'job_id': str, 'status': 'queued'}} */
             202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description quota_exceeded: the school's plan limit would be passed (`meta` {metric, limit, usage, adding}). */
+            409: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -24719,6 +25130,13 @@ export interface operations {
                 };
                 content?: never;
             };
+            /** @description quota_exceeded: the school's plan limit would be passed (`meta` {metric, limit, usage, adding}). */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
         };
     };
     student_promotions_list: {
@@ -25176,6 +25594,13 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["Student"];
                 };
+            };
+            /** @description quota_exceeded: the school's plan limit would be passed (`meta` {metric, limit, usage, adding}). */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };

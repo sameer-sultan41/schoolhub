@@ -53,6 +53,8 @@ CLIENT_KNOWN_SERVER_CODES = {
     "plan_in_use",
     "subscription_exists",
     "toggle_refused",
+    "limit_below_usage",
+    "quota_exceeded",
 }
 
 
@@ -166,6 +168,7 @@ class ErrorCodeContractTests(APITestCase):
             GraceExpired,
             NoLiveSubscription,
         )
+        from apps.platform_admin.usage.limits import LimitBelowUsage
         from core.ai.exceptions import AIQuotaExceeded, AIUnavailable
         from core.api.exceptions import (
             Conflict,
@@ -182,6 +185,7 @@ class ErrorCodeContractTests(APITestCase):
             MfaLockedOut,
         )
         from core.rbac.permissions import MfaRequired
+        from core.tenancy.quotas import QuotaExceeded
 
         emitted = set(_CODE_BY_STATUS.values()) | {
             DomainRuleViolation.default_code,
@@ -213,6 +217,10 @@ class ErrorCodeContractTests(APITestCase):
             SubscriptionExists.default_code,
             # The feature-flag console: a refused disable or kill-switch override.
             ToggleRefused.default_code,
+            # A limit lowered below a school's usage snapshot, unacknowledged.
+            LimitBelowUsage.default_code,
+            # A create past a plan's students, staff or storage limit.
+            QuotaExceeded.default_code,
         }
         self.assertEqual(
             emitted - CLIENT_KNOWN_SERVER_CODES,

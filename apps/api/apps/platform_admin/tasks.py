@@ -5,9 +5,12 @@ then handles one school at a time in that school's own transaction (`tenant_atom
 its `tenants` row locked and its state checked again: an operator may have moved the school
 since the candidates were read. One school failing is logged and the sweep goes on.
 
-Sweeps run on the `bulk` queue; the two notices on `transactional` (ruling C5,
-`CELERY_TASK_ROUTES`). Every system write passes ``actor_id=None`` and is audited through
-`record_system_audit` (ruling A3).
+The nightly usage snapshot (`snapshot_all`) visits every school through `for_each_tenant`,
+one bound transaction each. Sweeps and the snapshot run on the `bulk` queue; the notices
+on `transactional` (ruling C5, `CELERY_TASK_ROUTES`). The `:export` task lives with its
+resource in `export/tasks.py` under this module's name, and is imported here so the worker's
+autodiscovery registers it. Every system write passes
+``actor_id=None`` and is audited through `record_system_audit` (ruling A3).
 """
 
 from __future__ import annotations
@@ -17,21 +20,36 @@ import math
 import uuid
 from collections.abc import Callable
 from datetime import datetime, timedelta
+from decimal import Decimal
 
 from celery import shared_task
 from django.conf import settings
 from django.utils import timezone
 
 from apps.platform_admin import notifications
+from apps.platform_admin.export.tasks import export_tenant
 from apps.platform_admin.flags.services import lapse_expired_overrides
 from apps.platform_admin.models import Subscription, SubscriptionStatus
-from apps.platform_admin.subscriptions.services import grace_ends
+from apps.platform_admin.subscriptions.services import grace_ends, live_subscription
 from apps.platform_admin.tenants import lifecycle
+from apps.platform_admin.usage.services import snapshot_step
 from core.tenancy.context import tenant_atomic
 from core.tenancy.maintenance import for_each_tenant
 from core.tenancy.models import Tenant, TenantStatus
 
 logger = logging.getLogger(__name__)
+
+__all__ = [
+    "dunning_sweep",
+    "expire_trials",
+    "export_tenant",
+    "lapse_overrides",
+    "send_payment_failed_notice",
+    "send_quota_threshold_notice",
+    "send_trial_expiring_notice",
+    "snapshot_all",
+    "trial_reminders",
+]
 
 S = TenantStatus
 TRIAL_EXPIRED = "The trial ended without a plan."
@@ -189,6 +207,39 @@ def send_payment_failed_notice(*, tenant_id: str) -> int:
         )
 
 
+# ------------------------------------------------------------------------------- quotas
+
+#: How each counted metric reads in the notice.
+_METRIC_LABELS = {"students": "students", "staff": "staff", "storage_gb": "GB of storage"}
+
+
+@shared_task
+def send_quota_threshold_notice(
+    *, tenant_id: str, metric: str, band: str, usage: str, limit: int
+) -> int:
+    """`platform.quota-threshold` to the school's owners, once per metric, band and period.
+
+    The period is the live subscription's, so the next period, or a later band, notifies
+    again. Queued by `usage.quotas.threshold_reached` when a write commits.
+    """
+    with tenant_atomic(uuid.UUID(tenant_id)):
+        tenant = _locked(uuid.UUID(tenant_id))
+        sub = live_subscription(tenant.pk)
+        if sub is None:
+            return 0
+        shown = Decimal(usage)
+        return notifications.notify_owners_once(
+            tenant,
+            notifications.QUOTA_THRESHOLD,
+            occasion=f"{metric}:{band}:{sub.current_period_start.isoformat()}",
+            context={
+                "quota.metric": _METRIC_LABELS.get(metric, metric),
+                "quota.usage": f"{shown:.2f}" if metric == "storage_gb" else str(shown),
+                "quota.limit": limit,
+            },
+        )
+
+
 # ---------------------------------------------------------------------------- overrides
 
 
@@ -199,3 +250,17 @@ def lapse_overrides() -> dict[str, int]:
     Every school is a candidate: which ones hold an expired override is itself under RLS.
     """
     return for_each_tenant(lapse_expired_overrides, job="lapse-overrides")
+
+
+# -------------------------------------------------------------------------------- usage
+
+
+@shared_task
+def snapshot_all() -> dict[str, int]:
+    """Nightly: append one usage snapshot per school, suspended and deprovisioned included.
+
+    `for_each_tenant` binds each school in its own transaction, so every count is that
+    school's alone and one school failing does not stop the rest. The platform reports and
+    the console read the snapshots, never the schools' tables (multi-tenancy §8).
+    """
+    return for_each_tenant(snapshot_step, job="usage-snapshot")

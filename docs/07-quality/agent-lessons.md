@@ -99,6 +99,12 @@
   `TextChoices` values) did not clear it. CI's `typecheck` log named the real error at once:
   an unannotated `extra_kwargs = {"code": {"validators": []}}` (`[var-annotated]`). Read the
   error from CI (`gh run view <id> --log-failed`) rather than guessing.
+- **Mistake (again, platform-admin PR C).** CI's mypy rejected two typed shapes the code took
+  for granted: Task 6 compared `int | None` limits without narrowing them, and Task 8's
+  `PlatformJobSerializer.Meta` extended its base `Meta.fields`, a fixed-length tuple type, with
+  one more name (`[assignment]`). Both were fixed from the `typecheck` log (`8d8c3df4`,
+  `8958de51`): narrow before comparing, and declare a subclass's `Meta` on its own with
+  `fields: tuple[str, ...]`.
 - **Check.** Apply the fix the hook prints, on exactly the files it lists. The hooks run ruff,
   eslint and prettier; never run them yourself. The pre-commit checks only report, so edit the
   named files by hand, re-stage them and commit again. Delete an unused `noqa` rather than re-adding it, reword a flagged word rather than growing `.cspell/project-words.txt`, and never use `--no-verify`. Keep the reason a removed `noqa` carried as a plain comment. When a hook prints no detail (the pre-push mypy check), run the command it names once and read the error before editing; two guessed fixes in a row failed before the real cause (a class variable overridden by an annotated attribute) was read.
@@ -541,12 +547,28 @@
 ### L74. A guard on one write covers every write that makes the same change
 
 - **Mistake.** Platform-admin PR B Task 5 registered attendance's `module.timetable` disable guard on the flag-override writes only, and closed the deferred-work item. A plan change, a paid sign-up and a trial onto a plan without the module switched it off for the same school, unguarded (`e6061eb8`).
+- **Mistake (again).** PR C Task 6 asked `limit_below_usage` on a plan's limits and a school's `limits_override`, but not on `:change-plan` (fixed in `342dba65`), nor on a paid sign-up (`subscribe`, through `:activate`), which gives a school with no plan its first limits. That made four writes that lower a school's effective limits, not three; the fourth was caught in PR C's final review.
 - **Check.** Before closing a rule, list every write that reaches the same end state (here: anything that changes how a flag resolves for a school: overrides, plans, defaults) and either guard each or name the unguarded ones in `docs/deferred-work.md`.
 
 ### L75. A throttle keyed on a public value counts only verified requests
 
 - **Mistake.** The billing webhook's provider-wide throttle was a `throttle_classes` entry keyed on the public `{provider}` path segment, so unsigned posts from many addresses could use it up and get the real provider's events refused (platform-admin PR B Task 5). The precedent it copied is safe only because its key holds a secret token.
 - **Check.** On an unauthenticated endpoint, a bucket whose key an attacker can name is consumed after verification (`allow_request` by hand), and failures count in a separate per-IP bucket checked first.
+
+### L76. A new envelope key may already exist: grep before you define it
+
+- **Mistake.** Platform-admin PR C Task 7 added `meta.warnings` to the renderer and typed it in `ApiMeta` as if new. Academics' teacher allocations already sent `meta.warnings` with another entry shape: the narrowed type failed the dashboard typecheck at pre-push, and the renderer would have overwritten that view's list.
+- **Check.** Before adding a key to the envelope, `meta`, or a shared type, `grep -rn "<key>" apps/api apps/dashboard/src packages/*/src`. Merge with what a view already sets, never replace it, and keep the shared type no narrower than every producer.
+
+### L77. Wait for the RED run before pushing the implementation
+
+- **Mistake.** Platform-admin PR C Task 8 pushed its implementation (`58ff793c`) while the RED commit's api run was still testing. Each workflow's `concurrency` group is `ci-${{ github.ref }}` with `cancel-in-progress: true`, so the RED `test` job was cancelled and left no failure to cite (run 45171828463).
+- **Check.** After pushing failing tests, `gh run watch <id>` on the `api` (or `frontend`) run until its `test` job has a conclusion, and record that run id, before the next push to the branch.
+
+### L78. A new error code goes in three places in one commit
+
+- **Mistake.** Platform-admin PR C added error codes the server emits (`limit_below_usage`, then `quota_exceeded`) and missed a place each time: `quota_exceeded` was emitted for a task before `packages/types/src/api.ts` listed it (`3e07f908`), and the contract test's mirror must be kept in step by hand.
+- **Check.** When a `CodedAPIException` gets a new `default_code`, add it in the same commit to `API_ERROR_CODES` in `packages/types/src/api.ts` (with a comment naming the status and `meta`), to the mirror list in `apps/api/tests/test_api_contract.py`, and to the emitted-exception imports in that same test (beside `LimitBelowUsage`), so the test sees the code the server raises.
 
 ## 4. Adding a lesson
 

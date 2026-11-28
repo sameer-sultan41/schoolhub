@@ -17,7 +17,12 @@ from rest_framework import serializers
 
 from apps.school_organization.models import Campus, Department
 from apps.staff_management import uploads
-from apps.staff_management.models import Designation, EmploymentStatus, Staff
+from apps.staff_management.models import (
+    EXITED_EMPLOYMENT_STATUSES,
+    Designation,
+    EmploymentStatus,
+    Staff,
+)
 from apps.staff_management.serializers import READ_ONLY_FIELDS, _fk
 from apps.staff_management.staff.services.create import (
     assert_department_active,
@@ -157,7 +162,7 @@ class ExitRequestSerializer(serializers.Serializer):
     # knows this was a retirement or termination can now say so explicitly instead of
     # every exit being recorded as a resignation regardless of the real reason.
     exit_type = serializers.ChoiceField(
-        choices=[EmploymentStatus.RESIGNED, EmploymentStatus.RETIRED, EmploymentStatus.TERMINATED],
+        choices=list(EXITED_EMPLOYMENT_STATUSES),
         required=False,
         default=EmploymentStatus.RESIGNED,
     )

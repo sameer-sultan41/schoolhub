@@ -46,6 +46,17 @@ def parse_rows(
     return rows
 
 
+def count_rows(*, filename: str, data: bytes) -> int:
+    """How many data rows the file holds; 0 when it is unreadable (the import job reports why).
+
+    An upload's quota check uses it, before any job exists.
+    """
+    try:
+        return len(parse_rows(filename=filename, data=data))
+    except ImportFileError:
+        return 0
+
+
 def _parse_csv(data: bytes) -> tuple[list[str] | None, list[dict[str, str]]]:
     try:
         # utf-8-sig strips a BOM if Excel's "CSV UTF-8" added one.

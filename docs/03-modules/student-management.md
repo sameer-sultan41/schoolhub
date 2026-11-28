@@ -140,6 +140,7 @@ Transfers follow the same shape (`requested → approved/rejected → completed`
 - Transfers/withdrawals: only `active` students; effective date within the active session; approver ≠ initiator (RBAC §2.4); withdrawal blocked until cross-module clearance passes unless owner explicitly waives (audited).
 - Document uploads: type/size whitelist, AV scan; verification only by users holding `students.document.verify`.
 - Cross-tenant references (section, house, campus IDs) re-validated per [`multi-tenancy.md`](../02-architecture/multi-tenancy.md) §3.
+- **Plan quota** ([`platform-admin.md`](platform-admin.md) §7.8): a create that would take the school past its plan's `students` limit is refused 409 `quota_exceeded` (`error.meta` `{metric, limit, usage, adding}`); a create from 80 % of the limit (`PLATFORM_QUOTA_WARN_RATIO`) succeeds with a `quota_warning` in `meta.warnings`. `POST /student-imports` counts the file's rows and is refused before any job is created when they exceed the places left (`adding` is the row count; an accepted upload carries no warning, which comes from the job's creates); a row the job cannot create because the limit was reached meanwhile is reported as that row's error. A school with no plan, or no limit on `students`, is unlimited.
 
 ## 12. Notifications
 

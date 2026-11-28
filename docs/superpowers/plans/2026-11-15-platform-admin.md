@@ -211,17 +211,23 @@ its own migration; never use a merge migration.
     "ai_tokens")`, as non-negative integers or `null` (unlimited).
   - **Lowering a limit below usage:** refused 409 `limit_below_usage` when it drops below the latest snapshot
     of any tenant whose `current_plan` is the plan, unless the body carries `acknowledge_over_usage: true`.
+    *Amended (PR C):* the same 409 guards every write that lowers a school's effective limits: a
+    subscription's `limits_override`, `:change-plan` to a smaller plan, and a paid sign-up (`subscribe`,
+    reached through `:activate`) of a school with no plan, which was unlimited.
   - **`DELETE`** soft-deletes; it is refused 409 `plan_in_use` while any tenant's `current_plan` is the plan.
 - **Quota counters (fixed definitions):**
   - `students`: non-soft-deleted students whose status is not `withdrawn`, `graduated` or `transferred_out`;
   - `staff`: non-soft-deleted staff not `exited`;
-  - `storage_gb`: the sum of the tenant's `files.size_bytes`, in GiB.
+  - `storage_gb`: the sum of the tenant's `files.size_bytes`, in GiB. *Amended (PR C, user ruling):*
+    platform export archives (purpose `platform.tenant-export`) are left out, since the school can
+    neither see nor delete them.
 - **Settings (env-overridable, ADR-0014):**
   - `PLATFORM_TRIAL_REMINDER_DAYS = (7, 3, 1)`
   - `PLATFORM_DEFAULT_TRIAL_DAYS = 14`
   - `PLATFORM_DUNNING_GRACE_DAYS = 14`
   - `PLATFORM_RETENTION_DAYS = 90`
-  - `PLATFORM_QUOTA_WARN_RATIO = 0.9`
+  - `PLATFORM_QUOTA_WARN_RATIO = 0.9` *Amended (PR C, user ruling): 0.8*, matching §12's 80 % warning.
+  - *Amended (PR C):* `PLATFORM_EXPORT_TIME_LIMIT_SECONDS = 14400`, the export task's hard time limit.
   - `PLATFORM_IMPERSONATION_MAX_MINUTES = 60`
   - `PLATFORM_HANDOFF_CODE_TTL_SECONDS = 120`
   - `MFA_CHALLENGE_TTL_SECONDS = 300`
@@ -284,7 +290,9 @@ its own migration; never use a merge migration.
    - a 409 `quota_exceeded` with the metric, limit and usage;
    - exactly one of the two racers succeeds;
    - the import is refused at upload, before a job is created;
-   - from 90 % the response carries `meta.warnings`.
+   - from 90 % the response carries `meta.warnings`. *Amended (PR C):* from 80 %
+     (`PLATFORM_QUOTA_WARN_RATIO = 0.8`). The upload's pre-check is refuse-only
+     (`core.tenancy.quotas.assert_room`): no warning and no notice, since its rows may never be created.
 
    Covered in Task 7 by `test_create_at_limit_is_409`, `test_concurrent_creates_at_limit_minus_one`,
    `test_import_over_remaining_refused_at_upload` and `test_warn_band_adds_meta_warning`.
@@ -671,6 +679,19 @@ its own migration; never use a merge migration.
   4. zips the result into storage under the tenant prefix, as a `files` row with purpose `tenant_export`.
 
   `GET /platform/tenants/{tenant_pk}/jobs/{job_id}` polls the job (nested, bound).
+
+  *Amended (PR C):*
+  - `EXPORT_DENIED_FIELDS` is a standalone list of credentials and secrets (passwords, tokens, MFA
+    secrets, recovery-code hashes, integration credentials) plus any binary column. It does not extend
+    `_REDACTED_FIELDS`: by user ruling the school's personal records (`national_id`, `medical_notes`,
+    bank fields) stay in its export.
+  - The purpose is `platform.tenant-export`, since the purpose registry requires `<module>.<thing>`;
+    the job type stays `tenant_export`. Archives do not count toward the school's `storage_gb`.
+  - The poll carries no link. `POST .../jobs/{job_id}:download` (`platform.tenant.export`) mints a
+    short-lived signed link and writes an `export_download` audit row per call; a succeeded export
+    writes a system audit row with `{tables, rows, files, missing_files}` (SEC-17.5).
+  - The task has soft and hard time limits (`PLATFORM_EXPORT_TIME_LIMIT_SECONDS`). `:export` locks the
+    school's row, answers an export in flight, and fails and replaces one older than the limit.
 
 - [ ] **Step 1: Write the failing tests**
   - `test_revenue_never_sums_across_currencies`;

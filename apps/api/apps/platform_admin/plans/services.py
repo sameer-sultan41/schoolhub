@@ -14,9 +14,10 @@ from django.utils import timezone
 from rest_framework import serializers
 
 from apps.platform_admin.models import Plan
+from apps.platform_admin.usage.limits import latest_snapshots, refuse_below_usage
 from core.api.exceptions import CodedAPIException, DomainRuleViolation
 from core.tenancy.features import invalidate_feature_cache
-from core.tenancy.models import Tenant
+from core.tenancy.models import Tenant, TenantStatus
 
 CODE_FROZEN = "A plan's code cannot change once created."
 CODE_TAKEN = "Another plan already uses this code."
@@ -67,13 +68,31 @@ def create_plan(*, data: dict, actor_id: uuid.UUID | None) -> Plan:
 
 
 @transaction.atomic
-def update_plan(plan: Plan, *, data: dict, actor_id: uuid.UUID | None) -> Plan:
+def update_plan(
+    plan: Plan, *, data: dict, actor_id: uuid.UUID | None, acknowledge_over_usage: bool = False
+) -> Plan:
     """Change the editable fields in ``data``; module access follows at once.
 
     Existing subscribers see the new modules and limits on their next request: plans are not
-    versioned yet, so there is no grandfathering (deferred-work.md).
+    versioned yet, so there is no grandfathering (deferred-work.md). Lowering a limit below
+    the latest snapshot of a school on the plan is a 409 `limit_below_usage` unless
+    acknowledged; a school's own `limits_override` is not consulted, so the check may ask for
+    an acknowledgement the override makes unnecessary, never the reverse.
     """
     locked = Plan.objects.select_for_update().get(pk=plan.pk)
+    if "limits" in data:
+        # A deprovisioned or deleted school uses nothing it could be refused for.
+        schools = (
+            Tenant.objects.filter(current_plan=locked.code, deleted_at__isnull=True)
+            .exclude(status=TenantStatus.DEPROVISIONED)
+            .values_list("pk", flat=True)
+        )
+        refuse_below_usage(
+            locked.limits or {},
+            data["limits"],
+            latest_snapshots(schools),
+            acknowledged=acknowledge_over_usage,
+        )
     fields = [field for field in EDITABLE_FIELDS if field in data]
     for field in fields:
         setattr(locked, field, data[field])

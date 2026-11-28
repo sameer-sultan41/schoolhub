@@ -23,6 +23,8 @@ class AdvisoryLockNamespace(IntEnum):
 
     # Every exam sitting write and `:publish-schedule` in one school (examinations).
     EXAM_SCHEDULE = 1
+    # A school's usage of one quota metric, counted then written (core.tenancy.quotas).
+    QUOTA = 2
 
 
 def advisory_lock_key(key: uuid.UUID) -> int:
