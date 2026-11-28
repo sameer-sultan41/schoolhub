@@ -20,7 +20,7 @@ from django.utils import timezone
 from rest_framework import status
 from rest_framework.test import APITestCase
 
-from apps.platform_admin import notifications
+from apps.platform_admin import notifications, tasks
 from apps.platform_admin.subscriptions import services as subscriptions
 from apps.platform_admin.tests.base import make_plan
 from apps.platform_admin.tests.test_lifecycle import owner_of
@@ -371,12 +371,17 @@ class QuotaWarningTests(QuotaTestCase):
         on_plan(self.tenant, students=10)
         self.students(7)
 
-        with mock.patch.object(
-            Student.objects, "create", side_effect=IntegrityError("forced after the check")
+        with (
+            mock.patch.object(
+                Student.objects, "create", side_effect=IntegrityError("forced after the check")
+            ),
+            mock.patch.object(tasks.send_quota_threshold_notice, "delay") as queued,
         ):
             response = self.post_student()
 
         self.assertNotEqual(response.status_code, status.HTTP_201_CREATED)
+        # Eager Celery would run a queued notice inline, so check nothing was ever queued.
+        queued.assert_not_called()
         self.assertEqual(self.threshold_notices(), 0)
 
 

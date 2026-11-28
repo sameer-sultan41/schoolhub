@@ -4,17 +4,22 @@ from __future__ import annotations
 
 import csv
 import io
+import time
+import uuid
 import zipfile
+from concurrent.futures import Future, ThreadPoolExecutor
 from datetime import timedelta
 from unittest import mock
 
 from django.apps import apps as django_apps
 from django.conf import settings
-from django.db import models
+from django.db import connection, connections, models
+from django.test import SimpleTestCase, TransactionTestCase
 from django.utils import timezone
 from rest_framework import status
 
 from apps.platform_admin.constants import TENANT_EXPORT_JOB_TYPE
+from apps.platform_admin.export import services as export_services
 from apps.platform_admin.export.services import EXPORT_DENIED_FIELDS
 from apps.platform_admin.export.tasks import export_tenant
 from apps.platform_admin.tests.base import (
@@ -34,7 +39,7 @@ from core.files.models import File
 from core.files.storage import NullPresigner
 from core.files.tests.factories import FileFactory
 from core.jobs.models import BackgroundJob, JobStatus
-from core.tenancy.context import tenant_context
+from core.tenancy.context import tenant_atomic, tenant_context
 from core.tenancy.models import Tenant, TenantStatus
 from core.tenancy.rls import tenant_owned_tables
 
@@ -433,3 +438,83 @@ class ExportTests(PlatformAPITestCase):
             job = BackgroundJob.objects.get(pk=job_id)
         self.assertEqual(job.status, JobStatus.FAILED)
         self.assertIn("storage down", job.error)
+
+
+LOCK_WAIT_SECONDS = 10
+LOCK_POLL_SECONDS = 0.05
+
+
+class ConcurrentExportTests(TransactionTestCase):
+    """Two `:export` calls at once: the school's row lock makes the second see the first's job."""
+
+    def setUp(self) -> None:
+        super().setUp()
+        self.tenant = make_tenant(status=S.ACTIVE)
+
+    def start(self) -> tuple[uuid.UUID, bool]:
+        job, created = export_services.start_export(
+            Tenant.objects.get(pk=self.tenant.pk), actor_id=uuid.uuid4()
+        )
+        return job.pk, created
+
+    def wait_until_blocked(self, contending: Future) -> None:
+        deadline = time.monotonic() + LOCK_WAIT_SECONDS
+        while time.monotonic() < deadline:
+            with connection.cursor() as cursor:
+                cursor.execute("SELECT count(*) FROM pg_locks WHERE NOT granted")
+                (waiting,) = cursor.fetchone()
+            if waiting:
+                return
+            self.assertFalse(contending.done(), "the second :export returned without waiting")
+            time.sleep(LOCK_POLL_SECONDS)
+        self.fail("the second :export never waited on the school's row lock")
+
+    def test_concurrent_exports_create_one_job(self) -> None:
+        def contender() -> tuple[uuid.UUID, bool]:
+            try:
+                with tenant_atomic(self.tenant.pk):
+                    return self.start()
+            finally:
+                connections.close_all()
+
+        with ThreadPoolExecutor(max_workers=1) as pool:
+            with tenant_atomic(self.tenant.pk):
+                first_id, first_created = self.start()
+                contending = pool.submit(contender)
+                self.wait_until_blocked(contending)
+            second_id, second_created = contending.result(timeout=LOCK_WAIT_SECONDS)
+
+        self.assertTrue(first_created)
+        self.assertFalse(second_created)
+        self.assertEqual(second_id, first_id)
+        with tenant_atomic(self.tenant.pk):
+            self.assertEqual(
+                BackgroundJob.objects.filter(job_type=TENANT_EXPORT_JOB_TYPE).count(), 1
+            )
+
+
+#: Name fragments that suggest a credential or a secret.
+SECRET_NAME_FRAGMENTS = ("secret", "token", "password", "cipher", "api_key")
+#: Columns whose names match a fragment but hold no secret, each with the reason.
+NOT_SECRET = {
+    # AI usage metering: counts of model tokens (core/ai/models.py).
+    "input_tokens",
+    "output_tokens",
+    "cache_creation_input_tokens",
+    "cache_read_input_tokens",
+}
+
+
+class ExportDeniedFieldsCoverageTests(SimpleTestCase):
+    def test_every_secret_looking_column_is_denied_or_allowed(self) -> None:
+        offenders = sorted(
+            f"{model._meta.label}.{field.name}"
+            for model in django_apps.get_models()
+            for field in model._meta.concrete_fields
+            if any(fragment in field.name for fragment in SECRET_NAME_FRAGMENTS)
+            and field.name not in EXPORT_DENIED_FIELDS
+            and field.attname not in EXPORT_DENIED_FIELDS
+            and field.name not in NOT_SECRET
+        )
+        # A new credential column must join EXPORT_DENIED_FIELDS (or NOT_SECRET, with a reason).
+        self.assertEqual(offenders, [])

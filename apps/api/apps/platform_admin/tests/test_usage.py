@@ -28,6 +28,7 @@ from apps.platform_admin.tests.base import (
     tenant_url,
 )
 from apps.platform_admin.tests.test_subscriptions import live_on
+from apps.platform_admin.uploads import TENANT_EXPORT
 from apps.platform_admin.usage import services as usage
 from apps.school_organization.tests.factories import CampusFactory, UserFactory, grant
 from apps.staff_management.models import EmploymentStatus
@@ -129,6 +130,16 @@ class UsageCounterTests(TestCase):
                     "storage_gb": Decimal(3 * GIB + 512) / GIB,
                 },
             )
+
+    def test_platform_export_archives_do_not_count_toward_storage(self) -> None:
+        tenant = make_tenant(status=S.ACTIVE)
+        populate(tenant, files=[512])
+        with tenant_context(tenant.pk):
+            FileFactory(tenant=tenant, size_bytes=5 * GIB, purpose=TENANT_EXPORT.key)
+
+        with tenant_atomic(tenant.pk):
+            # The school cannot see or delete an archive, so it never uses up its storage.
+            self.assertEqual(usage.count_storage_bytes(tenant.pk), 512)
 
     def test_a_counter_refuses_a_school_that_is_not_bound(self) -> None:
         tenant, other = make_tenant(status=S.ACTIVE), make_tenant(status=S.ACTIVE)
@@ -430,6 +441,35 @@ class LimitBelowUsageTests(PlatformAPITestCase):
         )
         self.assertEqual(acknowledged.status_code, status.HTTP_200_OK, acknowledged.content)
         self.assertEqual(acknowledged.json()["data"]["limits"]["students"], 10)
+
+    def test_subscribe_below_usage_is_409(self) -> None:
+        # A school with no plan is unlimited; a paid sign-up onto a plan gives it limits.
+        tenant = make_tenant(status=S.TRIAL)
+        small = make_plan(limits={"students": 10})
+        snapshot_of(tenant, students=50)
+        now = timezone.now()
+        body = {
+            "plan_code": small.code,
+            "current_period_start": now.isoformat(),
+            "current_period_end": (now + timedelta(days=30)).isoformat(),
+        }
+
+        refused = self.client.post(subscription_url(tenant, ":activate"), body, format="json")
+
+        self.assert_error(refused, status.HTTP_409_CONFLICT, "limit_below_usage")
+        self.assertEqual(
+            refused.json()["error"]["meta"]["over_usage"],
+            [{"tenant_id": str(tenant.pk), "metric": "students", "limit": 10, "usage": 50}],
+        )
+        self.assertEqual(Tenant.objects.get(pk=tenant.pk).current_plan, "")
+
+        acknowledged = self.client.post(
+            subscription_url(tenant, ":activate"),
+            {**body, "acknowledge_over_usage": True},
+            format="json",
+        )
+        self.assertEqual(acknowledged.status_code, status.HTTP_200_OK, acknowledged.content)
+        self.assertEqual(Tenant.objects.get(pk=tenant.pk).current_plan, small.code)
 
     def test_change_plan_below_usage_is_409(self) -> None:
         tenant = make_tenant(status=S.TRIAL)
