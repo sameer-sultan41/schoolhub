@@ -158,6 +158,21 @@ describe("ImpersonateUserAction", () => {
     expect(open).toHaveAttribute("rel", expect.stringContaining("noreferrer") as string);
   });
 
+  it("sends exactly one request when the submit button is double-clicked", async () => {
+    platform.impersonateUser.mockReturnValue(new Promise(() => undefined));
+    const user = renderDetail(tenantRecord({ status: "active" }));
+    const dialog = await openDialog(user);
+
+    await user.click(within(dialog).getByRole("combobox", { name: "User" }));
+    await user.click(await screen.findByRole("option", { name: /Ayesha Khan/ }));
+    await user.type(within(dialog).getByLabelText(/reason/i), "Ticket 42: report card layout");
+    await user.dblClick(within(dialog).getByRole("button", { name: "Start session" }));
+
+    await waitFor(() => {
+      expect(platform.impersonateUser).toHaveBeenCalledTimes(1);
+    });
+  });
+
   it("keeps a refusal inline, with the dialog open", async () => {
     platform.impersonateUser.mockRejectedValue(
       // A string `detail` arrives as a `non_field` issue (`core/api/exceptions.py`).

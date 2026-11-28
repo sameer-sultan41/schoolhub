@@ -168,6 +168,8 @@ class GrantTests(ImpersonationTestCase):
         self.assert_error(self.as_bearer(first_access).get(ME_URL), 401, "impersonation_ended")
 
     def test_cannot_impersonate_platform_user(self) -> None:
+        # `users_platform_xor_tenant` already keeps a platform user out of any school, so the
+        # no-grant assertion below is guaranteed by the DB; the 422 is the behaviour under test.
         other_operator = platform_user("platform_support")
         response = self.start(other_operator)
 
@@ -517,6 +519,7 @@ class TenantUsersTests(ImpersonationTestCase):
         self.assertIn(str(self.target.pk), ids)
         self.assertNotIn(str(inactive.pk), ids)
         self.assertNotIn(str(other_school.pk), ids)
+        # Platform users never appear: DB constraint `users_platform_xor_tenant` guarantees it.
         self.assertNotIn(str(self.operator.pk), ids)
         row = next(r for r in rows if r["id"] == str(self.target.pk))
         self.assertEqual(set(row), {"id", "name", "email", "roles"})
@@ -584,6 +587,47 @@ class ReviewFixTests(ImpersonationTestCase):
         self.assertEqual(record.method, "GET")
         self.assertEqual(record.path, ME_URL)
         self.assertEqual(record.status, 200)
+
+    def test_a_line_logged_during_an_impersonated_request_carries_the_operator_then_stops(
+        self,
+    ) -> None:
+        access, row = self.impersonate()
+        probe = logging.getLogger("test.impersonation.probe")
+        formatted: list[dict] = []
+        real_keys = impersonation_services.effective_permission_keys
+
+        def log_then_resolve(user):
+            record = probe.makeRecord("probe", logging.INFO, __file__, 1, "mid-request", (), None)
+            formatted.append(json.loads(JSONFormatter().format(record)))
+            return real_keys(user)
+
+        with mock.patch("core.rbac.serializers.effective_permission_keys", log_then_resolve):
+            self.as_bearer(access).get(ME_URL)
+
+        self.assertTrue(formatted, "the probe ran inside the request")
+        self.assertEqual(formatted[0]["impersonated_by"], str(self.operator.pk))
+        self.assertEqual(formatted[0]["grant_id"], str(row.pk))
+        after = probe.makeRecord("probe", logging.INFO, __file__, 1, "after", (), None)
+        payload = json.loads(JSONFormatter().format(after))
+        self.assertNotIn("impersonated_by", payload)
+        self.assertNotIn("grant_id", payload)
+
+    def test_me_names_the_operator_by_first_and_last_name(self) -> None:
+        self.operator.first_name, self.operator.last_name = "Sara", "Khan"
+        self.operator.save(update_fields=["first_name", "last_name"])
+        access, _ = self.impersonate()
+
+        body = self.as_bearer(access).get(ME_URL).json()["data"]
+
+        self.assertEqual(body["impersonation"]["by_name"], "Sara Khan")
+
+    def test_me_names_a_nameless_operator_as_support_never_by_email(self) -> None:
+        access, _ = self.impersonate()
+
+        response = self.as_bearer(access).get(ME_URL)
+
+        self.assertEqual(response.json()["data"]["impersonation"]["by_name"], "SchoolHub support")
+        self.assertNotIn(self.operator.email, response.content.decode())
 
     def test_a_normal_request_logs_no_impersonation(self) -> None:
         own = APIClient()
