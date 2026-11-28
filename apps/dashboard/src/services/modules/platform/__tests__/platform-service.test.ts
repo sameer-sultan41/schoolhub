@@ -121,7 +121,11 @@ describe("platform-service", () => {
       current_period_end: "2027-01-01T00:00:00Z",
     };
 
-    await svc.activateSubscription(ID, { plan_code: "std", ...period }, KEY);
+    await svc.activateSubscription(
+      ID,
+      { plan_code: "std", ...period, acknowledge_over_usage: false },
+      KEY,
+    );
     await svc.recordPayment(ID, { paid_through: "2027-02-01T00:00:00Z" }, KEY);
     await svc.markPaymentFailed(ID, KEY);
     await svc.changePlan(ID, { plan_code: "pro", acknowledge_over_usage: true }, KEY);
@@ -129,7 +133,7 @@ describe("platform-service", () => {
     expect(mockPost).toHaveBeenNthCalledWith(
       1,
       `/platform/tenants/${ID}/subscription:activate`,
-      { plan_code: "std", ...period },
+      { plan_code: "std", ...period, acknowledge_over_usage: false },
       KEY,
     );
     expect(mockPost).toHaveBeenNthCalledWith(

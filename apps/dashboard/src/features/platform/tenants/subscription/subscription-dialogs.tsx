@@ -86,6 +86,7 @@ export function ActivateSubscriptionDialog({
           ...(needsPlan ? { plan_code: values.plan_code || null } : {}),
           current_period_start: localInputToIso(values.current_period_start) ?? "",
           current_period_end: localInputToIso(values.current_period_end) ?? "",
+          acknowledge_over_usage: false,
         },
         { idempotencyKey: key.current() },
       ),
