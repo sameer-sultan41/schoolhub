@@ -20,12 +20,13 @@ Work through this list in order. Steps 1–4 are one-time bootstrap that Terrafo
 cannot do for itself, because it needs somewhere to put its state before it can
 create anything.
 
-1. **Create the state bucket and enable versioning**, one per environment, in the
-   environment's own account. Block all public access. Enable SSE-KMS. Versioning
-   is what recovers a state file someone truncated.
-2. **Create the OIDC provider and the CI role** so GitHub Actions assumes a role
-   rather than holding long-lived keys. The plan role is read-only; the apply role
-   is separate and assumable only from the protected environment.
+1. **Apply [`bootstrap/`](bootstrap/README.md)** once, with admin credentials. It
+   creates the shared state bucket (versioned, SSE-KMS, history-erasure deny), the
+   GitHub OIDC provider, the per-environment plan and deploy roles, and the three
+   ECR repositories. Its README has the first-run sequence, including the OIDC
+   subject customisation.
+2. **Record the bootstrap outputs as GitHub variables** (`terraform output -json
+   github_variables`); the `schoolhub-deploy` skill's bootstrap mode sets them.
 3. **Register the platform domain and create the Route 53 hosted zone.** The `cdn`
    module takes `hosted_zone_id` as an input; it does not create the zone, because
    a destroyed and recreated zone means new nameservers and a domain-wide outage.
@@ -60,6 +61,7 @@ terraform/
 │   ├── storage/       S3 uploads + backups, versioning, lifecycle, Object Lock
 │   ├── ecs-service/   One Fargate service: task def, roles, target group, scaling
 │   └── cdn/           CloudFront, wildcard ACM cert, Route 53, WAF
+├── bootstrap/         State bucket, GitHub OIDC, CI roles, ECR (applied once, local state)
 └── envs/
     ├── staging/       Scaled-down copy of the production topology
     └── production/    Multi-AZ, WAF, Object Lock, no auto-apply
@@ -93,7 +95,6 @@ file per environment instead of hidden three levels down.
 
 Honest gaps, so nobody assumes coverage that does not exist:
 
-- **ECR repositories and lifecycle policies** — created with the CI pipeline.
 - **The ECS cluster itself** — `envs/*/main.tf` creates one inline; extract it to
   a module if a second cluster ever appears.
 - **The ALB** — also inline in the environments, since there is exactly one.
