@@ -112,18 +112,46 @@ export async function enrollMfa(): Promise<MfaEnrollResponse> {
   return data;
 }
 
+/** A session that can't continue: drop the token and the proxy's marker, so a link to /login
+ * reaches it instead of being sent back into the shell. */
+function endSession(): void {
+  accessTokenStore.clear();
+  clearSessionCookie();
+}
+
 /**
  * Turns TOTP on with a first code. The answer is a fresh session carrying the second factor and
  * the ten recovery codes, shown once; through the auth proxy, since it sets the refresh cookie.
+ *
+ * The auth proxy never refreshes, and the QR step can outlast the 15-minute access token, so an
+ * expired token is refreshed first through `apiClient`'s single-flight refresh. A session that
+ * can't be refreshed, or a 401 here, ends the session.
  */
 export async function confirmMfa(code: string): Promise<MfaConfirmResponse> {
-  const { data } = await authProxyClient.post<MfaConfirmResponse>(
-    endpoints.auth.mfaConfirm,
-    { code },
-    { credentials: "include" },
-  );
-  startSession(data);
-  return data;
+  if (!accessTokenStore.isValid()) {
+    const token = await apiClient.refresh();
+    if (!token) {
+      endSession();
+      throw new ApiError({
+        code: "unauthenticated",
+        message: "Your session has ended. Sign in again.",
+        status: 401,
+        url: endpoints.auth.mfaConfirm,
+      });
+    }
+  }
+  try {
+    const { data } = await authProxyClient.post<MfaConfirmResponse>(
+      endpoints.auth.mfaConfirm,
+      { code },
+      { credentials: "include" },
+    );
+    startSession(data);
+    return data;
+  } catch (error) {
+    if (error instanceof ApiError && error.isUnauthenticated) endSession();
+    throw error;
+  }
 }
 
 export async function logout(): Promise<void> {
