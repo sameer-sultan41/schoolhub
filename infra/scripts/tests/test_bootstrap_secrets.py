@@ -50,23 +50,24 @@ FAKE_AWS = textwrap.dedent(
     with (state_dir / "calls.jsonl").open("a") as calls:
         calls.write(json.dumps(sys.argv[1:]) + "\n")
 
+    # Like the real CLI: global options (each "--name value") come before the
+    # service and command; command options may take several values (--tags).
     args = sys.argv[1:]
-    opts, rest, i = {}, [], 0
-    while i < len(args):
-        a = args[i]
-        if a.startswith("--"):
-            values = []
-            i += 1
-            while i < len(args) and not args[i].startswith("--"):
-                values.append(args[i])
-                i += 1
-            opts[a] = values
-        else:
-            rest.append(a)
-            i += 1
-    service, command = rest[0], rest[1]
+    global_opts, i = {}, 0
+    while i < len(args) and args[i].startswith("--"):
+        global_opts[args[i]] = args[i + 1]
+        i += 2
+    service, command = args[i], args[i + 1]
     assert service == "secretsmanager", service
-    region = opts["--region"][0]
+    opts, i = {}, i + 2
+    while i < len(args):
+        name, values = args[i], []
+        i += 1
+        while i < len(args) and not args[i].startswith("--"):
+            values.append(args[i])
+            i += 1
+        opts[name] = values
+    region = global_opts["--region"]
 
     def value_of(raw):
         if raw.startswith("file://"):
