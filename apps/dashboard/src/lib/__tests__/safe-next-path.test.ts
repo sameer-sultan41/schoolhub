@@ -20,6 +20,10 @@ describe("safeNextPath", () => {
     ["a segment climbed back out of", "/a/..//evil.example"],
     ["an encoded parent segment", "/%2e%2e//evil.example"],
     ["a parent segment before a backslash", "/x/../\\evil.example"],
+    ["a newline smuggled between the slashes", "/\n/evil.example"],
+    ["a carriage return smuggled between the slashes", "/\r/evil.example"],
+    ["a mixed-case scheme", "JavaScript:alert(1)"],
+    ["a leading space", " /platform"],
   ])("refuses %s", (_case, next) => {
     expect(safeNextPath(next)).toBeNull();
   });
@@ -27,6 +31,10 @@ describe("safeNextPath", () => {
   it("keeps encoded slashes as a same-origin path, since they are not path separators", () => {
     expect(safeNextPath("/%2F%2F/evil.example")).toBe("/%2F%2F/evil.example");
     expect(safeNextPath("/%5C/evil.example")).toBe("/%5C/evil.example");
+  });
+
+  it("keeps an encoded tab as a same-origin path", () => {
+    expect(safeNextPath("/%09/evil")).toBe("/%09/evil");
   });
 
   it("refuses nothing at all", () => {

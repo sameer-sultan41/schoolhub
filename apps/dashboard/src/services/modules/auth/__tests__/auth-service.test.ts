@@ -169,6 +169,20 @@ describe("AuthService", () => {
       );
     });
 
+    it("ends the session and throws 401 when the refresh returns no token", async () => {
+      const { confirmMfa } = await import("../auth-service");
+      const { accessTokenStore } = await import("@/lib/auth");
+      accessTokenStore.clear();
+      document.cookie = "sh_session=1; path=/";
+      mockRefresh.mockResolvedValueOnce(null);
+
+      await expect(confirmMfa("123456")).rejects.toMatchObject({ status: 401 });
+
+      expect(mockPost).not.toHaveBeenCalled();
+      expect(document.cookie).not.toContain("sh_session=1");
+      expect(accessTokenStore.get()).toBeNull();
+    });
+
     it("ends the session marker on a 401, so Sign in again reaches /login", async () => {
       const { confirmMfa } = await import("../auth-service");
       const { accessTokenStore } = await import("@/lib/auth");
