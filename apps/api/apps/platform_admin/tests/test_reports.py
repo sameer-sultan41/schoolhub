@@ -146,6 +146,30 @@ class ReportTests(PlatformAPITestCase):
         self.assertEqual(adoption[(plan.code, "module.students")], 2)
         self.assertEqual(adoption[(plan.code, "module.fees")], 1)
 
+    def test_usage_p90_is_the_nearest_rank(self) -> None:
+        for students in range(1, 11):
+            snapshot_of(make_tenant(status=S.ACTIVE), students=students)
+
+        dist = {row["metric"]: row for row in self.sections("usage")["distribution"]}
+
+        # Nearest rank: the ceil(0.9 * 10) = 9th smallest of 1..10, not the maximum.
+        self.assertEqual(Decimal(dist["students"]["p90"]), 9)
+        self.assertEqual(Decimal(dist["students"]["max"]), 10)
+        self.assertEqual(Decimal(dist["students"]["median"]), Decimal("5.5"))
+
+    def test_a_zero_limit_in_use_is_quota_pressure(self) -> None:
+        plan = make_plan(limits={"students": 0, "staff": None})
+        over = make_tenant(status=S.ACTIVE)
+        snapshot_of(over, plan_code=plan.code, students=1, staff=50)
+        snapshot_of(make_tenant(status=S.ACTIVE), plan_code=plan.code, students=0)
+
+        pressure = self.sections("usage")["quota_pressure"]
+
+        # A limit of 0 is a limit; only null (unlimited) is skipped.
+        self.assertEqual(
+            [(row["tenant_id"], row["metric"]) for row in pressure], [(str(over.pk), "students")]
+        )
+
     def test_reports_read_no_tenant_owned_table(self) -> None:
         plan = make_plan()
         tenant = make_tenant(status=S.ACTIVE)

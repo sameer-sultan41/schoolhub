@@ -3,6 +3,8 @@ download links carry, and one shared signer per process."""
 
 from __future__ import annotations
 
+import io
+from unittest import mock
 from urllib.parse import parse_qs, urlsplit
 
 from django.test import SimpleTestCase, override_settings
@@ -80,6 +82,64 @@ class S3PresignerSignatureTests(SimpleTestCase):
         self.assertEqual(
             query.get("response-content-disposition"), ['attachment; filename="report.pdf"']
         )
+
+
+class S3PresignerTransferTests(SimpleTestCase):
+    """The server-side writes and reads a tenant export makes (boto3's documented calls)."""
+
+    def presigner(self) -> S3Presigner:
+        presigner = S3Presigner()
+        presigner._client = mock.Mock()
+        return presigner
+
+    @override_settings(**STORAGE, S3_PUBLIC_ENDPOINT_URL="")
+    def test_put_sends_bytes_in_one_request(self):
+        presigner = self.presigner()
+
+        presigner.put(storage_key="tenants/t/a.csv", data=b"x", content_type="text/csv")
+
+        presigner._client.put_object.assert_called_once_with(
+            Bucket="schoolhub-test", Key="tenants/t/a.csv", Body=b"x", ContentType="text/csv"
+        )
+        presigner._client.upload_fileobj.assert_not_called()
+
+    @override_settings(**STORAGE, S3_PUBLIC_ENDPOINT_URL="")
+    def test_put_streams_a_file_object_as_a_managed_upload(self):
+        presigner = self.presigner()
+        stream = io.BytesIO(b"zip")
+
+        presigner.put(storage_key="tenants/t/a.zip", data=stream, content_type="application/zip")
+
+        presigner._client.upload_fileobj.assert_called_once_with(
+            stream,
+            "schoolhub-test",
+            "tenants/t/a.zip",
+            ExtraArgs={"ContentType": "application/zip"},
+        )
+        presigner._client.put_object.assert_not_called()
+
+    @override_settings(**STORAGE, S3_PUBLIC_ENDPOINT_URL="")
+    def test_open_returns_the_object_s_body_stream(self):
+        presigner = self.presigner()
+        body = io.BytesIO(b"stored")
+        presigner._client.get_object.return_value = {"Body": body}
+
+        self.assertIs(presigner.open(storage_key="tenants/t/a.pdf"), body)
+        presigner._client.get_object.assert_called_once_with(
+            Bucket="schoolhub-test", Key="tenants/t/a.pdf"
+        )
+
+    @override_settings(**STORAGE, S3_PUBLIC_ENDPOINT_URL="")
+    def test_open_of_a_missing_object_is_file_not_found(self):
+        from botocore.exceptions import ClientError
+
+        presigner = self.presigner()
+        presigner._client.get_object.side_effect = ClientError(
+            {"Error": {"Code": "NoSuchKey", "Message": "gone"}}, "GetObject"
+        )
+
+        with self.assertRaises(FileNotFoundError):
+            presigner.open(storage_key="tenants/t/gone.pdf")
 
 
 class GetDownloadUrlTests(SimpleTestCase):
