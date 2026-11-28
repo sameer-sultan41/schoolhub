@@ -11,7 +11,7 @@ from django.http import HttpResponse
 from django.utils import timezone
 from drf_spectacular.types import OpenApiTypes
 from drf_spectacular.utils import OpenApiParameter, OpenApiResponse, extend_schema
-from rest_framework import exceptions
+from rest_framework import exceptions, serializers
 from rest_framework.request import Request
 from rest_framework.response import Response
 
@@ -36,6 +36,16 @@ def flatten(sections: Sections) -> list[dict]:
     ]
 
 
+class PlatformReportSerializer(serializers.Serializer):
+    key = serializers.CharField()
+    title = serializers.CharField()
+    generated_at = serializers.DateTimeField()
+    sections = serializers.DictField(
+        child=serializers.ListField(child=serializers.DictField()),
+        help_text="Named tables; every row of a section has the same keys (platform-admin §7.9).",
+    )
+
+
 class PlatformReportViewSet(PlatformViewSet):
     required_permission = "platform.report.view"
     http_method_names = ["get", "head", "options"]
@@ -49,8 +59,9 @@ class PlatformReportViewSet(PlatformViewSet):
         ],
         responses={
             200: OpenApiResponse(
-                description="JSON: {key, title, generated_at, sections: {name: [row]}}; "
-                "CSV or XLSX: the sections as one table, as an attachment."
+                response=PlatformReportSerializer,
+                description="JSON (the default); CSV or XLSX answer the sections as one table "
+                "with a leading `section` column, as an attachment.",
             ),
             404: OpenApiResponse(description="An unknown report key."),
         },
@@ -66,14 +77,13 @@ class PlatformReportViewSet(PlatformViewSet):
         sections = report.build()
         generated_at = timezone.now()
         if fmt == "json":
-            return Response(
-                {
-                    "key": report.key,
-                    "title": report.title,
-                    "generated_at": generated_at,
-                    "sections": sections,
-                }
-            )
+            payload = {
+                "key": report.key,
+                "title": report.title,
+                "generated_at": generated_at,
+                "sections": sections,
+            }
+            return Response(PlatformReportSerializer(payload).data)
         data, mime_type, extension = tabular.render(flatten(sections), fmt=fmt, title=report.title)
         response = HttpResponse(data, content_type=mime_type)
         filename = f"{report.key}-{generated_at:%Y%m%d}.{extension}"

@@ -17,6 +17,7 @@ from core.files.serializers import (
     FileSerializer,
 )
 from core.rbac.permissions import is_restricted_principal
+from core.tenancy.quotas import QUOTA_EXCEEDED_RESPONSE
 
 # The uploader confirms their own upload through this viewset, module-gated or not;
 # every other read here is generic and must not reach a module-gated file.
@@ -91,6 +92,7 @@ class FileViewSet(
         request=FileCreateSerializer,
         responses={
             201: FileSerializer,
+            409: QUOTA_EXCEEDED_RESPONSE,
             422: OpenApiResponse(description="A portal user asked for a staff-only purpose"),
         },
     )

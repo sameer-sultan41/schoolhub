@@ -221,8 +221,11 @@ either this file or `project-status.md`.
   - **SMS-credit, AI-token and API-rate quotas.** Only `students`, `staff` and `storage_gb` are
     enforced; the others have no counter (the AI gateway keeps its own per-school budget).
   - **Platform-ops copies of `platform.quota-threshold`.** Owners only; `it_admin` and the
-    platform-ops channel of §12 wait for that channel. §12's 80 % is
-    `PLATFORM_QUOTA_WARN_RATIO` (0.9) as built.
+    platform-ops channel of §12 wait for that channel.
+  - **Two `meta.warnings` entry shapes.** `quota_warning` is `{code, message, details}`;
+    academics' older `teacher_over_norm` puts its fields beside `code`. `ApiMeta.warnings`
+    stays untyped until `teacher_over_norm` moves to the shared shape (or the type becomes a
+    union on `code`); clients read each entry by `code` meanwhile.
   - **A notice for a school already over its limit.** The notice fires on a crossing made by a
     create; a school pushed over by a lowered, acknowledged limit is told nothing until it next
     crosses a band in a new period.
@@ -241,21 +244,23 @@ either this file or `project-status.md`.
     guardians, fee balances and marks history get their own plan.
   - **No school-side export request.** Only an operator starts `:export`; multi-tenancy §7 also
     lets a school's own admins request one (a tenant route and key).
-  - **Downloading an export is not audited.** `:export` is audited when it is requested; each
-    poll that signs a link to the archive is not.
+  - **Export size bounds.** The whole archive is written to the worker's temporary disk, so
+    that disk must hold the largest school's export. `create_ready_file` does not enforce the
+    purpose's 50 GiB `max_size_bytes`, so nothing stops a larger archive.
+  - **SEC-16's per-user export throttle.** `:export` has none; the in-flight dedupe (one export
+    per school at a time) keeps the risk low.
   - **The export counts toward the school's storage.** The archive is one of the school's own
     files (`platform.tenant-export`), so `storage_gb` includes it; `create_ready_file` is not
     quota-checked (Task 7), so the export itself is never refused.
-  - **Export archives are never pruned,** and the redactions follow `EXPORT_DENIED_FIELDS`,
-    which drops `national_id`, `bank_account`, `iban` and `medical_notes` (the audit trail's
-    list) from the school's own data too; a portability export may want them back, behind a
-    separate key.
+  - **Export archives are never pruned.**
   - **Report gaps against §13.** Time-to-active, dunning recovery rate, SMS and AI-token
     consumption, and the "support & health" report (impersonation counts, job-failure rates,
     onboarding funnel) are not built: they need data no snapshot holds yet. Quota pressure
     reads plan limits only, not a school's `limits_override` (under its RLS boundary). Churn
     is dated from `deprovision_after - PLATFORM_RETENTION_DAYS`, so a changed retention
-    setting shifts past months. Scheduled report delivery (§13) is not built.
+    setting shifts past months. Scheduled report delivery (§13) is not built. The revenue report's `paying_tenants`
+    counts past-due schools too (documented in platform-admin §7.9 rather than renamed, so the
+    console's column keeps its name); a `billed_tenants` rename is open if it misleads.
 
 - **AI gateway and AI-FEE-02 follow-ups** (`feat/ai-gateway`, plan
   `docs/superpowers/plans/2026-11-07-ai-gateway.md`, [ADR-0035](decisions/0035-ai-gateway-shape.md)).

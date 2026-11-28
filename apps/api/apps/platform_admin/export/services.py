@@ -8,7 +8,7 @@ the school's own requests; each query also filters on the school's id. `users`,
 
 Rows stream from a server-side cursor (`iterator()`), one table per transaction, and the
 archive is written to a temporary file, then streamed to storage: no table and no archive is
-held in memory whole.
+held in memory whole. The archive does sit whole on the worker's temporary disk.
 """
 
 from __future__ import annotations
@@ -22,33 +22,41 @@ import tempfile
 import uuid
 import zipfile
 from collections.abc import Iterable
-from datetime import date, datetime, time
+from datetime import date, datetime, time, timedelta
 from typing import IO
 
 from django.apps import apps
+from django.conf import settings
 from django.db import models
 from django.utils import timezone
 
 from apps.platform_admin.constants import TENANT_EXPORT_JOB_TYPE
 from apps.platform_admin.uploads import TENANT_EXPORT
-from core.audit.services import _REDACTED_FIELDS
 from core.exports.tabular import spreadsheet_safe
 from core.files.models import File, FileStatus
 from core.files.services import create_ready_file
 from core.files.storage import get_presigner
 from core.jobs.models import BackgroundJob, JobStatus
-from core.jobs.services import create_job
+from core.jobs.services import create_job, mark_failed
 from core.rbac.models import User, UserRole
 from core.tenancy.context import tenant_atomic
 from core.tenancy.models import Tenant, TenantScopedModel, TenantSettings
 
 logger = logging.getLogger(__name__)
 
-#: Columns no export carries: the audit trail's redactions, credentials and their hashes, and
-#: the encrypted integration credentials. Any `BinaryField` is left out as well (ciphertext).
-EXPORT_DENIED_FIELDS = _REDACTED_FIELDS | frozenset(
+#: Credentials and secrets, which are not portable data: no export carries them. Any
+#: `BinaryField` (ciphertext) is left out too. A school's personal records are kept: the
+#: archive is protected by the export key and an audited download instead.
+EXPORT_DENIED_FIELDS = frozenset(
     {
         "password",
+        "token",
+        "refresh",
+        "access",
+        "secret",
+        "api_key",
+        "otp",
+        "cvv",
         "token_hash",
         "mfa_secret",
         "code_hash",
@@ -60,20 +68,36 @@ EXPORT_DENIED_FIELDS = _REDACTED_FIELDS | frozenset(
 ARCHIVE_MIME_TYPE = "application/zip"
 _CHUNK_SIZE = 2000
 _IN_FLIGHT = (JobStatus.QUEUED, JobStatus.RUNNING)
+STALE_JOB_ERROR = "The export did not finish in time; its worker was lost. A new one started."
+
+
+def is_stale(job: BackgroundJob) -> bool:
+    """A job in flight longer than the task's hard time limit: its worker is gone."""
+    since = job.started_at if job.status == JobStatus.RUNNING and job.started_at else None
+    began = since or job.created_at
+    limit = timedelta(seconds=settings.PLATFORM_EXPORT_TIME_LIMIT_SECONDS)
+    return began < timezone.now() - limit
 
 
 def start_export(tenant: Tenant, *, actor_id: uuid.UUID) -> tuple[BackgroundJob, bool]:
     """The school's export job: the one in flight if there is one, else a new one.
 
-    Runs with the school bound. Returns ``(job, created)``; only a created job is queued.
+    Runs with the school bound. The school's row is locked first, so two concurrent calls
+    see each other's job. A job in flight past the time limit is failed and replaced.
+    Returns ``(job, created)``; only a created job is queued.
     """
+    Tenant.objects.select_for_update().get(pk=tenant.pk)
     running = (
-        BackgroundJob.objects.filter(job_type=TENANT_EXPORT_JOB_TYPE, status__in=_IN_FLIGHT)
+        BackgroundJob.objects.filter(
+            tenant_id=tenant.pk, job_type=TENANT_EXPORT_JOB_TYPE, status__in=_IN_FLIGHT
+        )
         .order_by("-created_at")
         .first()
     )
-    if running is not None:
+    if running is not None and not is_stale(running):
         return running, False
+    if running is not None:
+        mark_failed(job=running, error=STALE_JOB_ERROR)
     job = create_job(
         tenant_id=tenant.pk, job_type=TENANT_EXPORT_JOB_TYPE, payload={}, actor_id=actor_id
     )
@@ -153,25 +177,34 @@ def _stored_files(tenant_id: uuid.UUID) -> list[tuple[uuid.UUID, str, str]]:
         )
 
 
-def _files(archive: zipfile.ZipFile, tenant_id: uuid.UUID) -> int:
+def _files(archive: zipfile.ZipFile, tenant_id: uuid.UUID) -> tuple[int, list[str]]:
+    """Copy each stored file in; returns how many, and the ids whose object is missing."""
     presigner = get_presigner()
-    stored = _stored_files(tenant_id)
-    for file_id, storage_key, original_name in stored:
-        source = presigner.open(storage_key=storage_key)
+    copied = 0
+    missing: list[str] = []
+    for file_id, storage_key, original_name in _stored_files(tenant_id):
+        try:
+            source = presigner.open(storage_key=storage_key)
+        except FileNotFoundError:
+            logger.warning("Tenant export of %s: file %s has no stored object", tenant_id, file_id)
+            missing.append(str(file_id))
+            continue
+        copied += 1
         try:
             safe_name = original_name.replace("/", "_")
             with archive.open(f"files/{file_id}-{safe_name}", "w", force_zip64=True) as target:
                 shutil.copyfileobj(source, target)
         finally:
             source.close()
-    return len(stored)
+    return copied, missing
 
 
-def write_archive(tenant_id: uuid.UUID, target: IO[bytes]) -> dict[str, int]:
+def write_archive(tenant_id: uuid.UUID, target: IO[bytes]) -> dict:
     """Write the school's export into ``target`` as a zip; returns what it holds."""
     rows = 0
+    models_ = exported_models()
     with zipfile.ZipFile(target, "w", compression=zipfile.ZIP_DEFLATED) as archive:
-        for model in exported_models():
+        for model in models_:
             manager = model._base_manager
             rows += _table(
                 archive, tenant_id, model._meta.db_table, manager.filter(tenant_id=tenant_id)
@@ -190,8 +223,9 @@ def write_archive(tenant_id: uuid.UUID, target: IO[bytes]) -> dict[str, int]:
             "user_roles",
             UserRole.objects.filter(user__tenant_id=tenant_id),
         )
-        files = _files(archive, tenant_id)
-    return {"tables": len(exported_models()) + 3, "rows": rows, "files": files}
+        files, missing = _files(archive, tenant_id)
+    # The tenant-owned tables, plus `tenant_settings`, `users` and `user_roles`.
+    return {"tables": len(models_) + 3, "rows": rows, "files": files, "missing_files": missing}
 
 
 def run_export(*, tenant_id: uuid.UUID, actor_id: uuid.UUID) -> dict:

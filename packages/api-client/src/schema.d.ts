@@ -4394,6 +4394,38 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/platform/tenants/{tenant_pk}/jobs/{job_id}:download": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * A signed link to a finished export's archive (audited)
+         * @description Binds the target school of a ``.../tenants/<tenant_pk>/...`` route for the whole request.
+         *
+         *     **One target tenant per platform request.** ``initial()`` loads the tenant named by the
+         *     ``tenant_pk`` URL kwarg (404 if there is none), binds it the way
+         *     `core.api.viewsets.TenantScopedViewSetMixin` binds the caller's own, and sets
+         *     ``request.tenant``, so `record_audit` attributes each row to it. Under
+         *     ``ATOMIC_REQUESTS`` the binding's ``SET LOCAL`` lasts the whole request: reads and writes
+         *     alike see that school's rows and no other's.
+         *
+         *     The tenant is loaded only after authentication and the permission checks have passed, so
+         *     an unknown id answers 401, 404 or 403 exactly as a known one does, and is no oracle.
+         *
+         *     List it before `PlatformViewSet`: ``class X(PlatformTenantNestedMixin, PlatformViewSet)``.
+         */
+        post: operations["platform_tenants_jobs_:download_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/platform/tenants/{tenant_pk}/subscription": {
         parameters: {
             query?: never;
@@ -8891,6 +8923,21 @@ export interface components {
          * @enum {string}
          */
         ExpenseStatusEnum: "draft" | "submitted" | "approved" | "paid" | "rejected" | "reversed";
+        ExportAccepted: {
+            /**
+             * Format: uuid
+             * @description Poll .../tenants/{tenant_pk}/jobs/{job_id}.
+             */
+            job_id: string;
+            /** @description queued, or the status of the export in flight. */
+            status: string;
+        };
+        ExportDownload: {
+            /** @description A signed link to the archive. */
+            download_url: string;
+            /** @description Seconds the link stays valid. */
+            expires_in: number;
+        };
         FeatureFlag: {
             /** Format: uuid */
             readonly id: string;
@@ -12676,26 +12723,17 @@ export interface components {
             /** @description Lower a limit below a school's latest usage snapshot anyway; without it that is a 409 limit_below_usage. */
             acknowledge_over_usage?: boolean;
         };
-        PlatformJob: {
-            /** Format: uuid */
-            readonly id: string;
-            /** @description e.g. 'import.students', 'export.students', 'id-cards.generate'. */
-            readonly job_type: string;
-            readonly status: components["schemas"]["BackgroundJobStatusEnum"];
-            readonly progress: number;
-            /** @description Result summary, e.g. result_file_id. */
-            readonly result: unknown;
-            readonly error: string | null;
+        PlatformReport: {
+            key: string;
+            title: string;
             /** Format: date-time */
-            readonly started_at: string | null;
-            /** Format: date-time */
-            readonly finished_at: string | null;
-            /** Format: date-time */
-            readonly created_at: string;
-            /** Format: date-time */
-            readonly updated_at: string;
-            /** @description A short-lived signed link to the result file once the job succeeded; poll again for a fresh one. */
-            readonly download_url: string | null;
+            generated_at: string;
+            /** @description Named tables; every row of a section has the same keys (platform-admin §7.9). */
+            sections: {
+                [key: string]: {
+                    [key: string]: unknown;
+                }[];
+            };
         };
         PortalChild: {
             student: components["schemas"]["PortalStudent"];
@@ -18795,6 +18833,13 @@ export interface operations {
                     "application/json": components["schemas"]["File"];
                 };
             };
+            /** @description quota_exceeded: the school's plan limit would be passed (`meta` {metric, limit, usage, adding}). */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
             /** @description A portal user asked for a staff-only purpose */
             422: {
                 headers: {
@@ -21817,12 +21862,14 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description JSON: {key, title, generated_at, sections: {name: [row]}}; CSV or XLSX: the sections as one table, as an attachment. */
+            /** @description JSON (the default); CSV or XLSX answer the sections as one table with a leading `section` column, as an attachment. */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["PlatformReport"];
+                };
             };
             /** @description An unknown report key. */
             404: {
@@ -22050,8 +22097,37 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["PlatformJob"];
+                    "application/json": components["schemas"]["BackgroundJob"];
                 };
+            };
+        };
+    };
+    "platform_tenants_jobs_:download_create": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                job_id: string;
+                tenant_pk: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExportDownload"];
+                };
+            };
+            /** @description conflict: the job has not succeeded. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };
@@ -22320,12 +22396,14 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description {'data': {'job_id': str, 'status': 'queued'}}. An export already queued or running is returned instead of starting another. */
+            /** @description An export already queued or running is answered instead of a new one; one in flight past PLATFORM_EXPORT_TIME_LIMIT_SECONDS is failed and replaced. */
             202: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["ExportAccepted"];
+                };
             };
         };
     };
@@ -24048,6 +24126,13 @@ export interface operations {
                     "application/json": components["schemas"]["Staff"];
                 };
             };
+            /** @description quota_exceeded: the school's plan limit would be passed (`meta` {metric, limit, usage, adding}). */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
         };
     };
     staff_attendance_list: {
@@ -24305,6 +24390,13 @@ export interface operations {
         responses: {
             /** @description {'data': {'job_id': str, 'status': 'queued'}} */
             202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description quota_exceeded: the school's plan limit would be passed (`meta` {metric, limit, usage, adding}). */
+            409: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -25033,6 +25125,13 @@ export interface operations {
                 };
                 content?: never;
             };
+            /** @description quota_exceeded: the school's plan limit would be passed (`meta` {metric, limit, usage, adding}). */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
         };
     };
     student_promotions_list: {
@@ -25490,6 +25589,13 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["Student"];
                 };
+            };
+            /** @description quota_exceeded: the school's plan limit would be passed (`meta` {metric, limit, usage, adding}). */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };

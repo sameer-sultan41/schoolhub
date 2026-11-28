@@ -21,7 +21,7 @@ from django.core.signals import setting_changed
 from django.dispatch import receiver
 
 _UPLOAD_EXPIRY_SECONDS = 900
-_DOWNLOAD_EXPIRY_SECONDS = 300
+DOWNLOAD_EXPIRY_SECONDS = 300
 
 
 @dataclass(frozen=True)
@@ -38,7 +38,7 @@ class Presigner(Protocol):
         self,
         *,
         storage_key: str,
-        expires_in: int = _DOWNLOAD_EXPIRY_SECONDS,
+        expires_in: int = DOWNLOAD_EXPIRY_SECONDS,
         cache_control: str | None = None,
         content_disposition: str | None = None,
     ) -> str: ...
@@ -56,7 +56,10 @@ class Presigner(Protocol):
         ...
 
     def open(self, *, storage_key: str) -> IO[bytes]:
-        """A readable stream of a stored object, for a server-side copy (a tenant export)."""
+        """A readable stream of a stored object, for a server-side copy (a tenant export).
+
+        Raises ``FileNotFoundError`` when no object has the key.
+        """
         ...
 
 
@@ -86,7 +89,7 @@ class NullPresigner:
         self,
         *,
         storage_key: str,
-        expires_in: int = _DOWNLOAD_EXPIRY_SECONDS,
+        expires_in: int = DOWNLOAD_EXPIRY_SECONDS,
         cache_control: str | None = None,
         content_disposition: str | None = None,
     ) -> str:
@@ -153,7 +156,7 @@ class S3Presigner:
         self,
         *,
         storage_key: str,
-        expires_in: int = _DOWNLOAD_EXPIRY_SECONDS,
+        expires_in: int = DOWNLOAD_EXPIRY_SECONDS,
         cache_control: str | None = None,
         content_disposition: str | None = None,
     ) -> str:
@@ -194,7 +197,14 @@ class S3Presigner:
         )
 
     def open(self, *, storage_key: str) -> IO[bytes]:
-        return self._client.get_object(Bucket=self._bucket, Key=storage_key)["Body"]
+        from botocore.exceptions import ClientError
+
+        try:
+            return self._client.get_object(Bucket=self._bucket, Key=storage_key)["Body"]
+        except ClientError as exc:
+            if exc.response.get("Error", {}).get("Code") in {"404", "NoSuchKey"}:
+                raise FileNotFoundError(storage_key) from exc
+            raise
 
 
 _STORAGE_SETTINGS = frozenset(
