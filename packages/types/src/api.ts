@@ -184,7 +184,7 @@ export const API_ERROR_CODES = [
   // breach in `meta.over_usage`).
   "limit_below_usage",
   // A create that would take a school past its plan's students, staff or storage limit (409;
-  // apps/api/core/tenancy/quotas.py, `meta` is `{metric, limit, usage}`).
+  // apps/api/core/tenancy/quotas.py, `meta` is `{metric, limit, usage, adding}`).
   "quota_exceeded",
   // Synthesised by this client when the request never produced an envelope.
   "network_error",

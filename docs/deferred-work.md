@@ -228,9 +228,6 @@ either this file or `project-status.md`.
     purpose's 50 GiB `max_size_bytes`, so nothing stops a larger archive.
   - **SEC-16's per-user export throttle.** `:export` has none; the in-flight dedupe (one export
     per school at a time) keeps the risk low.
-  - **The export counts toward the school's storage.** The archive is one of the school's own
-    files (`platform.tenant-export`), so `storage_gb` includes it; `create_ready_file` is not
-    quota-checked (Task 7), so the export itself is never refused.
   - **Export archives are never pruned.**
   - **Report gaps against §13.** Time-to-active, dunning recovery rate, SMS and AI-token
     consumption, and the "support & health" report (impersonation counts, job-failure rates,
