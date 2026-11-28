@@ -32,9 +32,11 @@ permissions:
   # Required for OIDC role assumption once the plan step is enabled.
   id-token: write
 
+# On main, one group per SHA: ci_gate.py (deploy.yml) reads every main run, so none may
+# be cancelled or left pending behind another. PR branches still cancel stale runs.
 concurrency:
-  group: terraform-${{ github.ref }}
-  cancel-in-progress: true
+  group: terraform-${{ github.ref == 'refs/heads/main' && github.sha || github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 env:
   TF_VERSION: "1.13.3"
