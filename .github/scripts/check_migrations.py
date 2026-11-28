@@ -25,7 +25,6 @@ from __future__ import annotations
 import argparse
 import ast
 import json
-import re
 import subprocess
 import sys
 from collections.abc import Iterable, Mapping
@@ -33,10 +32,38 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Literal
 
-FieldKey = tuple[str, str, str]  # app label, lower-cased model name, field name
-PriorLookup = Mapping[FieldKey, ast.Call]
+# Sibling modules: this directory is sys.path[0] when the script runs, and the tests
+# put it there.
+from migration_ast import (
+    MIGRATION_PATH,
+    FieldKey,
+    ModelKey,
+    PriorLookup,
+    app_label,
+    arg,
+    callee,
+    literal_kw,
+    migration_operations,
+    module_constants,
+    literal_str,
+    created_models,
+    created_tables,
+    defined_fields,
+    prior_definitions,
+)
+from migration_sql import scan_sql
 
-MIGRATION_PATH = re.compile(r"^apps/api/(?:.+/)?([^/]+)/migrations/[0-9][^/]*\.py$")
+__all__ = [
+    "FieldKey",
+    "Finding",
+    "classify_source",
+    "created_models",
+    "created_tables",
+    "defined_fields",
+    "main",
+    "prior_definitions",
+    "scan_sql",
+]
 
 CONTRACT_OPS = {
     "RemoveField",
@@ -50,7 +77,6 @@ REVIEW_OPS = {"RunPython", "AlterUniqueTogether", "AlterIndexTogether", "AlterOr
 PASS_OPS = {
     "CreateModel",
     "AddIndex",
-    "AddConstraint",
     "RemoveIndex",
     "RenameIndex",
     "AlterModelOptions",
@@ -62,8 +88,6 @@ ALLOWED_HELPERS = {"rls_operations", "append_only_operations"}
 NO_COLUMN_FIELDS = {"ManyToManyField"}
 NARROWING_KEYS = ("max_length", "max_digits", "decimal_places")
 
-_MISSING = object()
-
 
 @dataclass(frozen=True)
 class Finding:
@@ -74,226 +98,21 @@ class Finding:
     reason: str
 
 
-# --- SQL ---------------------------------------------------------------------------
-
-_SQL_COMMENT_LINE = re.compile(r"--[^\n]*")
-_SQL_COMMENT_BLOCK = re.compile(r"/\*.*?\*/", re.DOTALL)
-_SQL_STRING = re.compile(r"'(?:[^']|'')*'")
-_DROP_NOT_NULL = re.compile(r"\bDROP\s+NOT\s+NULL\b")
-_SQL_CONTRACT = [
-    (re.compile(r"\bDROP\b"), "DROP removes something the running code may use"),
-    (re.compile(r"\bRENAME\b"), "RENAME breaks the running code's names"),
-    (
-        re.compile(r"\bALTER\s+(TABLE\s+\S+\s+)?(ALTER\s+)?(COLUMN\s+)?\S+\s+(SET\s+DATA\s+)?TYPE\b"),
-        "a column type change",
-    ),
-    (re.compile(r"\bSET\s+NOT\s+NULL\b"), "SET NOT NULL: the running code may write NULL"),
-    (re.compile(r"\bDISABLE\s+ROW\s+LEVEL\s+SECURITY\b"), "disables RLS (invariant 1)"),
-    (re.compile(r"\bNO\s+FORCE\s+ROW\s+LEVEL\s+SECURITY\b"), "un-forces RLS (invariant 1)"),
-    (re.compile(r"\bTRUNCATE\b"), "TRUNCATE deletes rows the running code reads"),
-    (re.compile(r"\bDELETE\s+FROM\b"), "DELETE FROM deletes rows the running code reads"),
-    (re.compile(r"\bUPDATE\s+\S+\s+SET\b"), "a data rewrite the running code does not expect"),
-]
-
-
-def scan_sql(sql: str) -> str | None:
-    """Return the contract reason for forward SQL, or None when it is expand-only."""
-    text = _SQL_COMMENT_BLOCK.sub(" ", sql)
-    text = _SQL_COMMENT_LINE.sub(" ", text)
-    text = _SQL_STRING.sub("''", text).upper()
-    text = _DROP_NOT_NULL.sub(" ", text)
-    for pattern, reason in _SQL_CONTRACT:
-        if pattern.search(text):
-            return f"RunSQL: {reason}"
-    return None
-
-
-# --- AST helpers -------------------------------------------------------------------
-
-
-def _callee(node: ast.expr) -> str | None:
-    if isinstance(node, ast.Attribute):
-        return node.attr
-    if isinstance(node, ast.Name):
-        return node.id
-    return None
-
-
-def _arg(call: ast.Call, name: str, position: int) -> ast.expr | None:
-    for kw in call.keywords:
-        if kw.arg == name:
-            return kw.value
-    if len(call.args) > position:
-        return call.args[position]
-    return None
-
-
-def _str(node: ast.expr | None) -> str | None:
-    if isinstance(node, ast.Constant) and isinstance(node.value, str):
-        return node.value
-    return None
-
-
-def _kw(call: ast.Call, name: str) -> object:
-    """A keyword's literal value; _MISSING when absent; raises ValueError when not literal."""
-    for kw in call.keywords:
-        if kw.arg == name:
-            return ast.literal_eval(kw.value)
-    return _MISSING
-
-
-def _app_label(path: str) -> str:
-    match = MIGRATION_PATH.match(path)
-    return match.group(1) if match else Path(path).parent.parent.name
-
-
-def _migration_operations(tree: ast.Module) -> list[ast.expr] | None:
-    for node in tree.body:
-        if isinstance(node, ast.ClassDef) and node.name == "Migration":
-            for stmt in node.body:
-                targets: list[ast.expr] = []
-                value: ast.expr | None = None
-                if isinstance(stmt, ast.Assign):
-                    targets, value = stmt.targets, stmt.value
-                elif isinstance(stmt, ast.AnnAssign):
-                    targets, value = [stmt.target], stmt.value
-                if any(isinstance(t, ast.Name) and t.id == "operations" for t in targets):
-                    if isinstance(value, ast.List | ast.Tuple):
-                        return list(value.elts)
-                    return None
-    return None
-
-
-def _module_constants(tree: ast.Module) -> dict[str, str]:
-    constants = {}
-    for node in tree.body:
-        if (
-            isinstance(node, ast.Assign)
-            and len(node.targets) == 1
-            and isinstance(node.targets[0], ast.Name)
-            and _str(node.value) is not None
-        ):
-            constants[node.targets[0].id] = _str(node.value) or ""
-    return constants
-
-
-def _fields_of(call: ast.Call) -> list[tuple[str, ast.Call]]:
-    """(field name, field Call) pairs of a CreateModel's `fields=[...]`."""
-    fields = _arg(call, "fields", 1)
-    pairs = []
-    if isinstance(fields, ast.List | ast.Tuple):
-        for elt in fields.elts:
-            if isinstance(elt, ast.Tuple) and len(elt.elts) == 2:
-                name = _str(elt.elts[0])
-                if name is not None and isinstance(elt.elts[1], ast.Call):
-                    pairs.append((name, elt.elts[1]))
-    return pairs
-
-
-def _iter_operations(ops: Iterable[ast.expr]) -> Iterable[ast.Call]:
-    """Every operation Call, recursing into SeparateDatabaseAndState's database half."""
-    for op in ops:
-        if not isinstance(op, ast.Call):
-            continue
-        if _callee(op.func) == "SeparateDatabaseAndState":
-            db_ops = _arg(op, "database_operations", 99)
-            if isinstance(db_ops, ast.List | ast.Tuple):
-                yield from _iter_operations(db_ops.elts)
-            continue
-        yield op
-
-
-def prior_definitions(sources: Iterable[tuple[str, str]]) -> dict[FieldKey, ast.Call]:
-    """The last definition of every field, reading migrations in filename order."""
-    defs: dict[FieldKey, ast.Call] = {}
-    for path, source in sorted(sources):
-        try:
-            tree = ast.parse(source)
-        except SyntaxError:
-            continue
-        ops = _migration_operations(tree)
-        if ops is None:
-            continue
-        app = _app_label(path)
-        for call in _iter_operations(ops):
-            name = _callee(call.func)
-            if name == "CreateModel":
-                model = _str(_arg(call, "name", 0))
-                if model is None:
-                    continue
-                for field_name, field in _fields_of(call):
-                    defs[(app, model.lower(), field_name)] = field
-            elif name in {"AddField", "AlterField"}:
-                model = _str(_arg(call, "model_name", 0))
-                field_name = _str(_arg(call, "name", 1))
-                field = _arg(call, "field", 2)
-                if model and field_name and isinstance(field, ast.Call):
-                    defs[(app, model.lower(), field_name)] = field
-    return defs
-
-
-def defined_fields(sources: Iterable[tuple[str, str]]) -> set[FieldKey]:
-    """Fields created (CreateModel or AddField) by these migrations, never AlterField."""
-    keys: set[FieldKey] = set()
-    for path, source in sources:
-        try:
-            tree = ast.parse(source)
-        except SyntaxError:
-            continue
-        app = _app_label(path)
-        for call in _iter_operations(_migration_operations(tree) or []):
-            name = _callee(call.func)
-            if name == "CreateModel":
-                model = _str(_arg(call, "name", 0))
-                if model:
-                    keys |= {(app, model.lower(), f) for f, _ in _fields_of(call)}
-            elif name == "AddField":
-                model = _str(_arg(call, "model_name", 0))
-                field_name = _str(_arg(call, "name", 1))
-                if model and field_name:
-                    keys.add((app, model.lower(), field_name))
-    return keys
-
-
-def created_tables(sources: Iterable[tuple[str, str]]) -> set[str]:
-    """Tables created by CreateModel: its db_table option, else <app_label>_<model>."""
-    tables = set()
-    for path, source in sources:
-        try:
-            tree = ast.parse(source)
-        except SyntaxError:
-            continue
-        for call in _iter_operations(_migration_operations(tree) or []):
-            if _callee(call.func) != "CreateModel":
-                continue
-            model = _str(_arg(call, "name", 0))
-            if model is None:
-                continue
-            table = f"{_app_label(path)}_{model.lower()}"
-            options = _arg(call, "options", 3)
-            if isinstance(options, ast.Dict):
-                for key, value in zip(options.keys, options.values, strict=True):
-                    if key is not None and _str(key) == "db_table" and _str(value):
-                        table = _str(value) or table
-            tables.add(table)
-    return tables
-
-
 # --- classification ----------------------------------------------------------------
 
 
 def _classify_add_field(call: ast.Call) -> tuple[str, str] | None:
-    field = _arg(call, "field", 2)
+    field = arg(call, "field", 2)
     if not isinstance(field, ast.Call):
         return ("review", "AddField with a field the checker cannot read")
-    if _callee(field.func) in NO_COLUMN_FIELDS:
+    if callee(field.func) in NO_COLUMN_FIELDS:
         return None
     # Any db_default (a literal or an expression such as Now()) gives the column a
     # database default, so the running code's inserts still succeed.
     if any(kw.arg == "db_default" for kw in field.keywords):
         return None
     try:
-        null = _kw(field, "null")
+        null = literal_kw(field, "null")
     except ValueError:
         return ("review", "AddField: null is not a literal")
     if null is True:
@@ -307,9 +126,9 @@ def _classify_add_field(call: ast.Call) -> tuple[str, str] | None:
 def _classify_alter_field(
     call: ast.Call, app: str, prior: PriorLookup, new_fields: set[FieldKey]
 ) -> tuple[str, str] | None:
-    model = _str(_arg(call, "model_name", 0))
-    name = _str(_arg(call, "name", 1))
-    new = _arg(call, "field", 2)
+    model = literal_str(arg(call, "model_name", 0))
+    name = literal_str(arg(call, "name", 1))
+    new = arg(call, "field", 2)
     if model is None or name is None or not isinstance(new, ast.Call):
         return ("review", "AlterField the checker cannot read")
     key = (app, model.lower(), name)
@@ -318,21 +137,21 @@ def _classify_alter_field(
         if key in new_fields:
             return None
         return ("review", "AlterField: cannot find the deployed definition")
-    if _callee(old.func) != _callee(new.func):
-        return ("contract", f"AlterField changes the type ({_callee(old.func)} -> {_callee(new.func)})")
+    if callee(old.func) != callee(new.func):
+        return ("contract", f"AlterField changes the type ({callee(old.func)} -> {callee(new.func)})")
     try:
-        old_null, new_null = _kw(old, "null"), _kw(new, "null")
+        old_null, new_null = literal_kw(old, "null"), literal_kw(new, "null")
         if old_null is True and new_null is not True:
             return ("contract", "AlterField sets NOT NULL: the running code may write NULL")
         for key_name in NARROWING_KEYS:
-            before, after = _kw(old, key_name), _kw(new, key_name)
+            before, after = literal_kw(old, key_name), literal_kw(new, key_name)
             if (
                 isinstance(before, int)
                 and isinstance(after, int)
                 and after < before
             ):
                 return ("contract", f"AlterField narrows {key_name} ({before} -> {after})")
-        if _kw(old, "db_column") != _kw(new, "db_column"):
+        if literal_kw(old, "db_column") != literal_kw(new, "db_column"):
             return ("contract", "AlterField changes db_column: the running code reads the old name")
     except ValueError:
         return ("review", "AlterField: a compared keyword is not a literal")
@@ -340,11 +159,11 @@ def _classify_alter_field(
 
 
 def _run_sql_statements(call: ast.Call, constants: Mapping[str, str]) -> list[str] | None:
-    node = _arg(call, "sql", 0)
+    node = arg(call, "sql", 0)
 
     def resolve(n: ast.expr) -> str | None:
-        if _str(n) is not None:
-            return _str(n)
+        if literal_str(n) is not None:
+            return literal_str(n)
         if isinstance(n, ast.Name):
             return constants.get(n.id)
         return None
@@ -373,19 +192,19 @@ def _classify_helper(call: ast.Call, new_tables: frozenset[str]) -> tuple[str, s
         "RLS or append-only change on an existing table: running code may lose access mid-deploy",
     )
     for arg in call.args:
-        table = _str(arg)
+        table = literal_str(arg)
         if table is None or table not in new_tables:
             return review
     for kw in call.keywords:
-        if _callee(call.func) != "append_only_operations" or kw.arg != "mutable_columns":
+        if callee(call.func) != "append_only_operations" or kw.arg != "mutable_columns":
             return review
         if not isinstance(kw.value, ast.Dict):
             return review
         for key, value in zip(kw.value.keys, kw.value.values, strict=True):
-            if key is None or _str(key) not in new_tables:
+            if key is None or literal_str(key) not in new_tables:
                 return review
             if not isinstance(value, ast.List | ast.Tuple) or any(
-                _str(e) is None for e in value.elts
+                literal_str(e) is None for e in value.elts
             ):
                 return review
     return None
@@ -397,6 +216,7 @@ def classify_source(
     prior: PriorLookup,
     new_fields: set[FieldKey],
     new_tables: frozenset[str] = frozenset(),
+    new_models: frozenset[ModelKey] = frozenset(),
 ) -> list[Finding]:
     """Every contract or review finding in one added migration."""
     try:
@@ -406,12 +226,12 @@ def classify_source(
             Finding(path, exc.lineno or 1, "SyntaxError", "contract",
                     "cannot parse: cannot prove this migration is expand-only")
         ]
-    ops = _migration_operations(tree)
+    ops = migration_operations(tree)
     if ops is None:
         return [Finding(path, 1, "operations", "review",
                         "no literal Migration.operations list the checker can read")]
-    constants = _module_constants(tree)
-    app = _app_label(path)
+    constants = module_constants(tree)
+    app = app_label(path)
     findings: list[Finding] = []
 
     def add(node: ast.AST, op: str, result: tuple[str, str] | None) -> None:
@@ -423,8 +243,8 @@ def classify_source(
         for op in elements:
             if isinstance(op, ast.Starred):
                 inner = op.value
-                if isinstance(inner, ast.Call) and _callee(inner.func) in ALLOWED_HELPERS:
-                    add(op, _callee(inner.func) or "", _classify_helper(inner, new_tables))
+                if isinstance(inner, ast.Call) and callee(inner.func) in ALLOWED_HELPERS:
+                    add(op, callee(inner.func) or "", _classify_helper(inner, new_tables))
                 else:
                     add(op, "Starred", ("review", "operation built by code the checker cannot read"))
                 continue
@@ -432,9 +252,9 @@ def classify_source(
                 add(op, type(op).__name__,
                     ("review", "operation built by code the checker cannot read"))
                 continue
-            name = _callee(op.func) or "?"
+            name = callee(op.func) or "?"
             if name == "SeparateDatabaseAndState":
-                db_ops = _arg(op, "database_operations", 99)
+                db_ops = arg(op, "database_operations", 99)
                 if isinstance(db_ops, ast.List | ast.Tuple):
                     walk(db_ops.elts)
                 elif db_ops is not None:
@@ -452,11 +272,16 @@ def classify_source(
                 if statements is None:
                     add(op, name, ("review", "RunSQL whose SQL the checker cannot read"))
                 else:
-                    for sql in statements:
-                        reason = scan_sql(sql)
-                        if reason:
-                            add(op, name, ("contract", reason))
-                            break
+                    results = [r for r in (scan_sql(sql) for sql in statements) if r]
+                    contract = [r for r in results if r[0] == "contract"]
+                    if results:
+                        add(op, name, (contract or results)[0])
+            elif name == "AddConstraint":
+                # A new constraint on an existing table can refuse the running code's
+                # writes; on a table created in this release nothing depends on it yet.
+                model = literal_str(arg(op, "model_name", 0))
+                if model is None or (app, model.lower()) not in new_models:
+                    add(op, name, ("review", "AddConstraint on an existing table can refuse the running code's writes"))
             elif name in REVIEW_OPS:
                 add(op, name, ("review", f"{name} needs a human look"))
             else:
@@ -512,6 +337,7 @@ def collect_findings(repo: Path, base: str, target: str) -> list[Finding]:
         return findings
     new_fields = defined_fields(added_sources)
     new_tables = frozenset(created_tables(added_sources))
+    new_models = frozenset(created_models(added_sources))
     needs_prior = any("AlterField" in src for _, src in added_sources)
     prior: PriorLookup = (
         prior_definitions((p, _show(repo, base, p)) for p in _tree_migrations(repo, base))
@@ -519,7 +345,7 @@ def collect_findings(repo: Path, base: str, target: str) -> list[Finding]:
         else {}
     )
     for path, source in added_sources:
-        findings += classify_source(source, path, prior, new_fields, new_tables)
+        findings += classify_source(source, path, prior, new_fields, new_tables, new_models)
     return findings
 
 

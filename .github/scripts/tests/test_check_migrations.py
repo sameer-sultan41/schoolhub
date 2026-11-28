@@ -77,6 +77,7 @@ def classify(source: str, new_sources: list[tuple[str, str]] | None = None) -> l
         prior(),
         cm.defined_fields(added),
         frozenset(cm.created_tables(added)),
+        frozenset(cm.created_models(added)),
     )
 
 
@@ -192,6 +193,12 @@ class ContractTests(unittest.TestCase):
             'migrations.RemoveField(model_name="invoice", name="note")], state_operations=[])'
         ))
 
+    def test_run_sql_revoke_is_contract(self) -> None:
+        self.assertContract(migration('migrations.RunSQL("REVOKE UPDATE ON t FROM schoolhub_app")'))
+
+    def test_run_sql_add_not_null_column_without_default_is_contract(self) -> None:
+        self.assertContract(migration('migrations.RunSQL("ALTER TABLE t ADD COLUMN c integer NOT NULL")'))
+
     def test_syntax_error_is_contract(self) -> None:
         findings = classify("class Migration(:\n")
         self.assertEqual(severities(findings), {"contract"})
@@ -232,6 +239,25 @@ class ReviewTests(unittest.TestCase):
     def test_rls_with_non_literal_argument_is_review(self) -> None:
         self.assertReviewOnly(migration("*rls_operations(TABLES)"), [(f"{APP}/0003_t1.py", CREATE_T1)])
 
+    def test_run_sql_enable_rls_is_review(self) -> None:
+        self.assertReviewOnly(migration('migrations.RunSQL("ALTER TABLE t ENABLE ROW LEVEL SECURITY")'))
+
+    def test_run_sql_force_rls_is_review(self) -> None:
+        self.assertReviewOnly(migration('migrations.RunSQL("ALTER TABLE t FORCE ROW LEVEL SECURITY")'))
+
+    def test_run_sql_create_policy_is_review(self) -> None:
+        self.assertReviewOnly(migration('migrations.RunSQL("CREATE POLICY p ON t USING (true)")'))
+
+    def test_run_sql_add_constraint_is_review(self) -> None:
+        self.assertReviewOnly(migration(
+            'migrations.RunSQL("ALTER TABLE t ADD CONSTRAINT c FOREIGN KEY (a) REFERENCES b ON UPDATE CASCADE")'
+        ))
+
+    def test_add_constraint_on_existing_table_is_review(self) -> None:
+        self.assertReviewOnly(migration(
+            'migrations.AddConstraint(model_name="invoice", constraint=models.UniqueConstraint(fields=["code"], name="u"))'
+        ))
+
     def test_unknown_operation_is_review(self) -> None:
         self.assertReviewOnly(migration("migrations.AlterSomethingNew()"))
 
@@ -253,11 +279,32 @@ class CleanTests(unittest.TestCase):
             'migrations.AddField(model_name="invoice", name="x", field=models.IntegerField(db_default=0))'
         ))
 
-    def test_add_index_and_constraint_are_clean(self) -> None:
+    def test_add_index_is_clean(self) -> None:
         self.assertClean(migration(
-            'migrations.AddIndex(model_name="invoice", index=models.Index(fields=["code"], name="i"))',
-            'migrations.AddConstraint(model_name="invoice", constraint=models.UniqueConstraint(fields=["code"], name="u"))',
+            'migrations.AddIndex(model_name="invoice", index=models.Index(fields=["code"], name="i"))'
         ))
+
+    def test_add_constraint_on_table_created_this_release_is_clean(self) -> None:
+        self.assertClean(
+            migration(
+                'migrations.AddConstraint(model_name="t1", constraint=models.UniqueConstraint(fields=["id"], name="u"))'
+            ),
+            [(f"{APP}/0003_t1.py", CREATE_T1)],
+        )
+
+    def test_many_to_many_add_field_is_clean(self) -> None:
+        self.assertClean(migration(
+            'migrations.AddField(model_name="invoice", name="tags", field=models.ManyToManyField(to="fees.term"))'
+        ))
+
+    def test_not_null_add_field_with_expression_db_default_is_clean(self) -> None:
+        self.assertClean(migration(
+            'migrations.AddField(model_name="invoice", name="at", '
+            'field=models.DateTimeField(db_default=django.db.models.functions.Now()))'
+        ))
+
+    def test_run_sql_add_not_null_column_with_default_is_clean(self) -> None:
+        self.assertClean(migration('migrations.RunSQL("ALTER TABLE t ADD COLUMN c integer NOT NULL DEFAULT 0")'))
 
     def test_alter_field_changing_only_choices_is_clean(self) -> None:
         self.assertClean(migration(ALTER.format(
@@ -302,11 +349,6 @@ class CleanTests(unittest.TestCase):
 
     def test_grant_update_is_clean(self) -> None:
         self.assertClean(migration('migrations.RunSQL("GRANT UPDATE (c) ON t TO r")'))
-
-    def test_on_update_cascade_is_clean(self) -> None:
-        self.assertClean(migration(
-            'migrations.RunSQL("ALTER TABLE t ADD CONSTRAINT c FOREIGN KEY (a) REFERENCES b ON UPDATE CASCADE")'
-        ))
 
     def test_remove_field_only_in_state_operations_is_clean(self) -> None:
         self.assertClean(migration(
