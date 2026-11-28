@@ -667,6 +667,9 @@ PLATFORM_QUOTA_WARN_RATIO = env.float("PLATFORM_QUOTA_WARN_RATIO", default=0.8)
 PLATFORM_IMPERSONATION_MAX_MINUTES = env.int("PLATFORM_IMPERSONATION_MAX_MINUTES", default=60)
 # Lifetime of the single-use code that hands an impersonation session to the dashboard.
 PLATFORM_HANDOFF_CODE_TTL_SECONDS = env.int("PLATFORM_HANDOFF_CODE_TTL_SECONDS", default=120)
+# Hard time limit of a tenant export (`export_tenant`); its soft limit is a minute earlier. A
+# job in flight longer than this is treated as lost, failed, and replaced by the next `:export`.
+PLATFORM_EXPORT_TIME_LIMIT_SECONDS = env.int("PLATFORM_EXPORT_TIME_LIMIT_SECONDS", default=14400)
 # Shared secret of the billing provider's webhook. Empty = the webhook answers 503.
 PLATFORM_BILLING_WEBHOOK_SECRET = env("PLATFORM_BILLING_WEBHOOK_SECRET", default="")
 # Billing providers whose webhook is accepted (apps/platform_admin/billing). Empty by default,

@@ -10,6 +10,7 @@ A report is ``build() -> {section: [row, ...]}``; every row of a section has the
 
 from __future__ import annotations
 
+import math
 import statistics
 from collections import Counter, defaultdict
 from collections.abc import Callable
@@ -88,7 +89,11 @@ def tenant_overview() -> Sections:
 
 
 def revenue() -> Sections:
-    """MRR and ARR per plan and currency, never summed across currencies, with past-due counts."""
+    """MRR and ARR per plan and currency, never summed across currencies, with past-due counts.
+
+    `paying_tenants` counts every school whose subscription is billed, past-due ones included;
+    `past_due` is the subset whose payment failed.
+    """
     totals: dict[tuple[str, str], dict] = {}
     for snapshot in _latest(REVENUE_STATUSES):
         if not snapshot.currency:
@@ -130,7 +135,8 @@ def usage() -> Sections:
                 {"metric": metric, "tenants": 0, "min": "", "median": "", "p90": "", "max": ""}
             )
             continue
-        p90 = values[min(len(values) - 1, int(len(values) * 0.9))]
+        # Nearest rank: the ceil(0.9 n)-th smallest.
+        p90 = values[math.ceil(0.9 * len(values)) - 1]
         distribution.append(
             {
                 "metric": metric,
@@ -150,19 +156,28 @@ def usage() -> Sections:
     for snapshot, used in usages:
         for metric in COUNTED_METRICS:
             limit = (limits.get(snapshot.plan_code) or {}).get(metric)
-            if not limit or Decimal(str(used[metric])) < ratio * limit:
+            if limit is None:  # unlimited
+                continue
+            usage = Decimal(str(used[metric]))
+            # A zero limit is under pressure as soon as anything is in use.
+            under = usage == 0 if limit == 0 else usage < ratio * limit
+            if under:
                 continue
             pressure.append(
                 {
                     "tenant_id": str(snapshot.tenant_id),
                     "plan_code": snapshot.plan_code,
                     "metric": metric,
-                    "usage": _number(used[metric]),
+                    "usage": _number(usage),
                     "limit": limit,
-                    "ratio": _number(Decimal(str(used[metric])) / limit),
+                    "ratio": _number(usage / limit) if limit else None,
                 }
             )
-    pressure.sort(key=lambda row: Decimal(row["ratio"]), reverse=True)
+    # Highest ratio first; a zero limit in use has no ratio and leads.
+    pressure.sort(
+        key=lambda row: Decimal("Infinity") if row["ratio"] is None else Decimal(row["ratio"]),
+        reverse=True,
+    )
 
     adoption: dict[tuple[str, str], int] = defaultdict(int)
     for snapshot in snapshots:

@@ -11,6 +11,11 @@ urlpatterns = [
         name="platform-tenants-export",
     ),
     path(
+        "tenants/<uuid:tenant_pk>/jobs/<uuid:job_id>:download",
+        TenantExportViewSet.as_view({"post": "download"}),
+        name="platform-tenant-job-download",
+    ),
+    path(
         "tenants/<uuid:tenant_pk>/jobs/<uuid:job_id>",
         TenantExportViewSet.as_view({"get": "retrieve"}),
         name="platform-tenant-job",
