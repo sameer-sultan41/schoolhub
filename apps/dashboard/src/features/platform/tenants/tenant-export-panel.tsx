@@ -14,23 +14,32 @@ import { PLATFORM_QUERY_MODULE } from "@/services/modules/platform/platform-cons
 
 /**
  * "Export first": starts the school's export (`:export`, a job) and polls it until it succeeds
- * or fails, then offers its signed download link. Starting again while one runs rejoins it
- * (the server returns the queued or running job), so a double click starts one export. The
- * delete itself is the server's to allow: it accepts any succeeded export of the school, from
- * this panel or an earlier one, and answers 409 `export_required` without one or a waiver.
+ * or fails. Download mints a fresh signed link per click (`:download`, audited on the server).
+ * Starting again while one runs rejoins it (the server returns the queued or running job), so
+ * a double click starts one export. The delete itself is the server's to allow: it accepts any
+ * succeeded export of the school, from this panel or an earlier one, and answers 409
+ * `export_required` without one or a waiver.
  */
 export function TenantExportPanel({ tenantId }: { tenantId: string }) {
   const t = useTranslations("platform.lifecycle.delete.export");
   const tErrors = useTranslations("errors");
   const tCommon = useTranslations("common");
-  // One key per panel: a retry after a lost answer replays the first start.
+  // One key per attempt: a retry after a lost answer replays its start. A failed job ends the
+  // attempt, since the server would replay that key's 202 with the failed job.
   const keyRef = useRef<string>(crypto.randomUUID());
   const [jobId, setJobId] = useState<string | null>(null);
 
   const start = useMutation({
     mutationFn: () => Services.platform.exportTenant(tenantId, { idempotencyKey: keyRef.current }),
     onSuccess: (accepted) => {
-      setJobId(accepted.jobId);
+      setJobId(accepted.job_id);
+    },
+  });
+  // A fresh signed link per click: the poll carries none, and each download is audited.
+  const download = useMutation({
+    mutationFn: (id: string) => Services.platform.downloadTenantExport(tenantId, id),
+    onSuccess: (link) => {
+      downloadFile(link.download_url);
     },
   });
 
@@ -51,19 +60,25 @@ export function TenantExportPanel({ tenantId }: { tenantId: string }) {
           isLoading={isBusy}
           loadingLabel={t("running", { progress: job?.progress ?? 0 })}
           onClick={() => {
-            if (watch.isTimedOut || watch.isError) watch.resume();
-            else start.mutate();
+            if (watch.isTimedOut || watch.isError) {
+              watch.resume();
+              return;
+            }
+            if (job?.status === "failed") keyRef.current = crypto.randomUUID();
+            start.mutate();
           }}
           disabled={job?.status === "succeeded"}
         >
           {watch.isTimedOut || watch.isError ? t("checkAgain") : t("start")}
         </Button>
-        {job?.status === "succeeded" && job.download_url && (
+        {job?.status === "succeeded" && (
           <Button
             type="button"
             variant="ghost"
+            isLoading={download.isPending}
+            loadingLabel={t("download")}
             onClick={() => {
-              if (job.download_url) downloadFile(job.download_url);
+              download.mutate(job.id);
             }}
           >
             <Download aria-hidden="true" />
@@ -80,12 +95,16 @@ export function TenantExportPanel({ tenantId }: { tenantId: string }) {
               ? t("progress", { progress: job?.progress ?? 0 })
               : null}
       </p>
-      {(start.isError || job?.status === "failed" || watch.isError) && (
+      {(start.isError || job?.status === "failed" || watch.isError || download.isError) && (
         <Alert variant="destructive">
           <AlertDescription>
             {job?.status === "failed"
               ? (job.error ?? t("failed"))
-              : resolveErrorMessage(start.error ?? watch.error, tErrors, tCommon("submitFailed"))}
+              : resolveErrorMessage(
+                  start.error ?? watch.error ?? download.error,
+                  tErrors,
+                  tCommon("submitFailed"),
+                )}
           </AlertDescription>
         </Alert>
       )}

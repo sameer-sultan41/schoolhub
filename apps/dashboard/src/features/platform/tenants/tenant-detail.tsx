@@ -14,14 +14,10 @@ import { useCurrentUser } from "@/hooks/use-current-user";
 import { useUrlParams } from "@/hooks/use-url-params";
 import { resolveErrorMessage } from "@/lib/error-message";
 import { hasPermission } from "@/lib/permissions";
-import { queryKeys } from "@/lib/query-client";
 import { ApiError, Services } from "@/services";
-import {
-  PLATFORM_QUERY_MODULE,
-  TENANT_DETAIL_RESOURCE,
-} from "@/services/modules/platform/platform-constant";
 import { PLATFORM_KEYS } from "@/features/platform/platform-permissions";
 import { TenantStatusBadge } from "@/features/platform/shared/platform-badges";
+import { tenantDetailKey } from "@/features/platform/shared/platform-query-keys";
 import { TenantActions } from "./tenant-actions";
 import { TenantOverridesTab } from "./overrides/tenant-overrides-tab";
 import { TenantOverviewTab } from "./tenant-overview-tab";
@@ -39,11 +35,6 @@ export interface TenantDetailProps {
   tenantId: string;
   /** Extra header actions after the lifecycle ones: the page puts "Impersonate user" here. */
   extraActions?: ReactNode;
-}
-
-/** The query key of one school's record in the console, for a write that changes it. */
-export function tenantDetailKey(tenantId: string) {
-  return queryKeys.detail(PLATFORM_QUERY_MODULE, TENANT_DETAIL_RESOURCE, tenantId);
 }
 
 /**

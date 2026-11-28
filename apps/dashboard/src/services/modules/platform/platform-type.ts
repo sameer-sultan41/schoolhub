@@ -31,7 +31,14 @@ export type FeatureOverrideInput = ApiSchemas["TenantFeatureOverrideCreate"];
 
 export type TenantUsage = ApiSchemas["TenantUsage"];
 export type UsageSnapshot = ApiSchemas["TenantUsageSnapshot"];
-export type PlatformJob = ApiSchemas["PlatformJob"];
+/** A school's platform job, as the poll answers it: no file link (`:download` mints one). */
+export type PlatformJob = ApiSchemas["BackgroundJob"];
+/** `:export`'s 202: the job to poll, and its status. */
+export type ExportAccepted = ApiSchemas["ExportAccepted"];
+/** `.../jobs/{job_id}:download`: a short-lived signed link, minted and audited per call. */
+export type ExportDownload = ApiSchemas["ExportDownload"];
+/** `GET /platform/reports/{key}`'s JSON: each section a list of rows with the same keys. */
+export type PlatformReport = ApiSchemas["PlatformReport"];
 
 /** A school user the console may impersonate, and starting that impersonation (ADR-0037). */
 export type TenantUser = ApiSchemas["TenantUser"];
@@ -58,14 +65,6 @@ export interface OverUsage {
   usage: number;
 }
 
-/** `GET /platform/reports/{key}`'s JSON: each section is a list of flat rows. */
-export interface PlatformReport {
-  key: string;
-  title: string;
-  generated_at: string;
-  sections: Record<string, Record<string, unknown>[]>;
-}
-
 /** A page-numbered platform list's query. */
 export interface PlatformPageQuery {
   page?: number;
@@ -89,9 +88,4 @@ export interface TenantUserQuery {
 
 export interface PlanPageQuery extends PlatformPageQuery {
   isActive?: boolean;
-}
-
-/** `202` from `:export`: the job to poll. */
-export interface ExportAccepted {
-  jobId: string;
 }

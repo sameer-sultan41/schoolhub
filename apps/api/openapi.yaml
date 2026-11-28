@@ -1026,7 +1026,6 @@ paths:
   /api/v1/auth/change-password:
     post:
       operationId: auth_change_password_create
-      description: Refused 403 ``impersonation_forbidden`` under impersonation (ADR-0037).
       tags:
       - auth
       requestBody:
@@ -1046,51 +1045,6 @@ paths:
       responses:
         '204':
           description: No response body
-  /api/v1/auth/impersonation:end:
-    post:
-      operationId: auth_impersonation:end_create
-      description: End the impersonated session's own grant; 404 when the session
-        is not impersonated.
-      tags:
-      - auth
-      security:
-      - jwtAuth: []
-      responses:
-        '204':
-          description: No response body
-        '404':
-          description: not_found
-  /api/v1/auth/impersonation:exchange:
-    post:
-      operationId: auth_impersonation:exchange_create
-      description: |-
-        Spend a handoff code (single use, ``PLATFORM_HANDOFF_CODE_TTL_SECONDS``) for
-        ``{access, expires_in}``: an access token of the user, with no refresh token or cookie,
-        that expires with the grant. An unknown, spent or expired code, or a grant that is no longer
-        live, is a 400 ``invalid_link``.
-      tags:
-      - auth
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/Exchange'
-          application/x-www-form-urlencoded:
-            schema:
-              $ref: '#/components/schemas/Exchange'
-          multipart/form-data:
-            schema:
-              $ref: '#/components/schemas/Exchange'
-        required: true
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ExchangeResponse'
-          description: ''
-        '400':
-          description: invalid_link
   /api/v1/auth/invitations:accept:
     post:
       operationId: auth_invitations:accept_create
@@ -1187,9 +1141,6 @@ paths:
   /api/v1/auth/logout:
     post:
       operationId: auth_logout_create
-      description: |-
-        Ends the session: blacklists the refresh cookie's token, or, under impersonation,
-        releases the grant and leaves the cookie alone (the operator's tab holds none of its own).
       tags:
       - auth
       security:
@@ -1200,9 +1151,8 @@ paths:
   /api/v1/auth/me:
     get:
       operationId: auth_me_retrieve
-      description: |-
-        The authenticated principal, with effective permissions for UI gating, and the
-        impersonation the session runs under (`impersonation`, null for a normal session).
+      description: The authenticated principal, with effective permissions for UI
+        gating.
       tags:
       - auth
       security:
@@ -1212,7 +1162,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Me'
+                $ref: '#/components/schemas/User'
           description: ''
   /api/v1/auth/mfa:confirm:
     post:
@@ -1271,8 +1221,7 @@ paths:
         Platform users only in v1 (a tenant principal gets 404). Refused 409
         ``mfa_already_enabled`` once MFA is on, so a password-only token can never replace an
         enrolled factor (ruling A2); an operator who lost theirs is reset with
-        ``create_platform_admin --reset-mfa``. Refused 403 ``impersonation_forbidden`` under
-        impersonation (ADR-0037).
+        ``create_platform_admin --reset-mfa``.
       tags:
       - auth
       security:
@@ -5292,6 +5241,9 @@ paths:
               schema:
                 $ref: '#/components/schemas/File'
           description: ''
+        '409':
+          description: 'quota_exceeded: the school''s plan limit would be passed (`meta`
+            {metric, limit, usage, adding}).'
         '422':
           description: A portal user asked for a staff-only purpose
   /api/v1/files/{id}:
@@ -9295,28 +9247,6 @@ paths:
               schema:
                 $ref: '#/components/schemas/FeatureFlag'
           description: ''
-  /api/v1/platform/impersonation-grants/{id}:
-    delete:
-      operationId: platform_impersonation_grants_destroy
-      description: |-
-        `DELETE /platform/impersonation-grants/{id}`: the holder releases, a super admin revokes.
-
-        Anyone else gets a 404, as for a grant that does not exist. Ending an ended grant is a 204.
-      summary: Release or revoke an impersonation grant
-      parameters:
-      - in: path
-        name: id
-        schema:
-          type: string
-          format: uuid
-        required: true
-      tags:
-      - platform
-      security:
-      - jwtAuth: []
-      responses:
-        '204':
-          description: No response body
   /api/v1/platform/plans:
     get:
       operationId: platform_plans_list
@@ -9516,8 +9446,12 @@ paths:
       - jwtAuth: []
       responses:
         '200':
-          description: 'JSON: {key, title, generated_at, sections: {name: [row]}};
-            CSV or XLSX: the sections as one table, as an attachment.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlatformReport'
+          description: JSON (the default); CSV or XLSX answer the sections as one
+            table with a leading `section` column, as an attachment.
         '404':
           description: An unknown report key.
   /api/v1/platform/tenants:
@@ -9812,8 +9746,52 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/PlatformJob'
+                $ref: '#/components/schemas/BackgroundJob'
           description: ''
+  /api/v1/platform/tenants/{tenant_pk}/jobs/{job_id}:download:
+    post:
+      operationId: platform_tenants_jobs_:download_create
+      description: |-
+        Binds the target school of a ``.../tenants/<tenant_pk>/...`` route for the whole request.
+
+        **One target tenant per platform request.** ``initial()`` loads the tenant named by the
+        ``tenant_pk`` URL kwarg (404 if there is none), binds it the way
+        `core.api.viewsets.TenantScopedViewSetMixin` binds the caller's own, and sets
+        ``request.tenant``, so `record_audit` attributes each row to it. Under
+        ``ATOMIC_REQUESTS`` the binding's ``SET LOCAL`` lasts the whole request: reads and writes
+        alike see that school's rows and no other's.
+
+        The tenant is loaded only after authentication and the permission checks have passed, so
+        an unknown id answers 401, 404 or 403 exactly as a known one does, and is no oracle.
+
+        List it before `PlatformViewSet`: ``class X(PlatformTenantNestedMixin, PlatformViewSet)``.
+      summary: A signed link to a finished export's archive (audited)
+      parameters:
+      - in: path
+        name: job_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      - in: path
+        name: tenant_pk
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - platform
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExportDownload'
+          description: ''
+        '409':
+          description: 'conflict: the job has not succeeded.'
   /api/v1/platform/tenants/{tenant_pk}/subscription:
     get:
       operationId: platform_tenants_subscription_retrieve
@@ -9919,7 +9897,9 @@ paths:
         '409':
           description: 'invalid_transition: the subscription''s status does not allow
             this move; subscription_exists: the school already has a live subscription;
-            toggle_refused: the plan would switch off a module the school still needs.'
+            toggle_refused: the plan would switch off a module the school still needs;
+            limit_below_usage: a paid sign-up onto a plan whose limits are below the
+            school''s usage, without acknowledge_over_usage.'
         '422':
           description: No active plan has this code.
   /api/v1/platform/tenants/{tenant_pk}/subscription:change-plan:
@@ -10059,55 +10039,6 @@ paths:
               schema:
                 $ref: '#/components/schemas/TenantUsage'
           description: ''
-  /api/v1/platform/tenants/{tenant_pk}/users:
-    get:
-      operationId: platform_tenants_users_list
-      description: |-
-        `GET /platform/tenants/{tenant_pk}/users?q=&role=`: whom the console may impersonate.
-
-        The school's active, non-platform logins, with their live roles' slugs. ``q`` matches the
-        name, email or username; ``role`` a role slug.
-      summary: The school's users the console may impersonate
-      parameters:
-      - name: page
-        required: false
-        in: query
-        description: A page number within the paginated result set.
-        schema:
-          type: integer
-      - name: page_size
-        required: false
-        in: query
-        description: Number of results to return per page.
-        schema:
-          type: integer
-      - in: query
-        name: q
-        schema:
-          type: string
-        description: Part of a name, email or username.
-      - in: query
-        name: role
-        schema:
-          type: string
-        description: A role slug the user holds.
-      - in: path
-        name: tenant_pk
-        schema:
-          type: string
-          format: uuid
-        required: true
-      tags:
-      - platform
-      security:
-      - jwtAuth: []
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/PaginatedTenantUserList'
-          description: ''
   /api/v1/platform/tenants/{tenant_pk}:delete:
     post:
       operationId: platform_tenants_:delete_create
@@ -10176,49 +10107,13 @@ paths:
       - jwtAuth: []
       responses:
         '202':
-          description: '{''data'': {''job_id'': str, ''status'': ''queued''}}. An
-            export already queued or running is returned instead of starting another.'
-  /api/v1/platform/tenants/{tenant_pk}:impersonate:
-    post:
-      operationId: platform_tenants_:impersonate_create
-      description: '`POST /platform/tenants/{tenant_pk}:impersonate`.'
-      summary: 'Impersonate a school user: a time-boxed grant and its one-time handoff
-        link'
-      parameters:
-      - in: path
-        name: tenant_pk
-        schema:
-          type: string
-          format: uuid
-        required: true
-      tags:
-      - platform
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/Impersonate'
-          application/x-www-form-urlencoded:
-            schema:
-              $ref: '#/components/schemas/Impersonate'
-          multipart/form-data:
-            schema:
-              $ref: '#/components/schemas/Impersonate'
-        required: true
-      security:
-      - jwtAuth: []
-      responses:
-        '201':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/GrantStarted'
-          description: ''
-        '409':
-          description: 'conflict: the school is not operational.'
-        '422':
-          description: 'domain_rule_violation: a duration out of range, or a user
-            who is not an active, non-platform user of this school.'
+                $ref: '#/components/schemas/ExportAccepted'
+          description: An export already queued or running is answered instead of
+            a new one; one in flight past PLATFORM_EXPORT_TIME_LIMIT_SECONDS is failed
+            and replaced.
   /api/v1/platform/tenants/{tenant_pk}:provision:
     post:
       operationId: platform_tenants_:provision_create
@@ -12749,6 +12644,9 @@ paths:
               schema:
                 $ref: '#/components/schemas/Staff'
           description: ''
+        '409':
+          description: 'quota_exceeded: the school''s plan limit would be passed (`meta`
+            {metric, limit, usage, adding}).'
   /api/v1/staff-attendance:
     get:
       operationId: staff_attendance_list
@@ -13134,6 +13032,9 @@ paths:
       responses:
         '202':
           description: '{''data'': {''job_id'': str, ''status'': ''queued''}}'
+        '409':
+          description: 'quota_exceeded: the school''s plan limit would be passed (`meta`
+            {metric, limit, usage, adding}).'
   /api/v1/staff-qualifications/{id}:
     get:
       operationId: staff_qualifications_retrieve
@@ -14105,6 +14006,9 @@ paths:
       responses:
         '202':
           description: '{''data'': {''job_id'': str, ''status'': ''queued''}}'
+        '409':
+          description: 'quota_exceeded: the school''s plan limit would be passed (`meta`
+            {metric, limit, usage, adding}).'
   /api/v1/student-promotions:
     get:
       operationId: student_promotions_list
@@ -14830,6 +14734,9 @@ paths:
               schema:
                 $ref: '#/components/schemas/Student'
           description: ''
+        '409':
+          description: 'quota_exceeded: the school''s plan limit would be passed (`meta`
+            {metric, limit, usage, adding}).'
   /api/v1/students/{id}:
     get:
       operationId: students_retrieve
@@ -19528,26 +19435,6 @@ components:
         * `final` - Final
         * `practical` - Practical
         * `custom` - Custom
-    Exchange:
-      type: object
-      properties:
-        code:
-          type: string
-          maxLength: 200
-      required:
-      - code
-    ExchangeResponse:
-      type: object
-      description: 'Schema only: an access token with no refresh token, valid until
-        the grant expires.'
-      properties:
-        access:
-          type: string
-        expires_in:
-          type: integer
-      required:
-      - access
-      - expires_in
     ExitRequest:
       type: object
       properties:
@@ -19797,6 +19684,31 @@ components:
         * `paid` - Paid
         * `rejected` - Rejected
         * `reversed` - Reversed
+    ExportAccepted:
+      type: object
+      properties:
+        job_id:
+          type: string
+          format: uuid
+          description: Poll .../tenants/{tenant_pk}/jobs/{job_id}.
+        status:
+          type: string
+          description: queued, or the status of the export in flight.
+      required:
+      - job_id
+      - status
+    ExportDownload:
+      type: object
+      properties:
+        download_url:
+          type: string
+          description: A signed link to the archive.
+        expires_in:
+          type: integer
+          description: Seconds the link stays valid.
+      required:
+      - download_url
+      - expires_in
     FeatureFlag:
       type: object
       properties:
@@ -21064,25 +20976,6 @@ components:
       - grant-register
       type: string
       description: '* `grant-register` - grant-register'
-    GrantStarted:
-      type: object
-      description: 'Schema only: the grant, and the link that opens the school''s
-        dashboard as the user.'
-      properties:
-        grant_id:
-          type: string
-          format: uuid
-        expires_at:
-          type: string
-          format: date-time
-        handoff_url:
-          type: string
-          description: Single use, within PLATFORM_HANDOFF_CODE_TTL_SECONDS; the code
-            is its fragment.
-      required:
-      - expires_at
-      - grant_id
-      - handoff_url
     GrantTypeEnum:
       enum:
       - discount
@@ -21292,36 +21185,6 @@ components:
           minItems: 1
       required:
       - student_ids
-    Impersonate:
-      type: object
-      properties:
-        user_id:
-          type: string
-          format: uuid
-        reason:
-          type: string
-          description: Why; shown in the audit log.
-          maxLength: 1000
-        duration_minutes:
-          type: integer
-          description: 1 to PLATFORM_IMPERSONATION_MAX_MINUTES; outside it, a 422.
-      required:
-      - duration_minutes
-      - reason
-      - user_id
-    ImpersonationSummary:
-      type: object
-      description: Who is acting as this user, and until when; the dashboard's banner
-        shows it.
-      properties:
-        by_name:
-          type: string
-        expires_at:
-          type: string
-          format: date-time
-      required:
-      - by_name
-      - expires_at
     IncomeVsExpenseReportRow:
       type: object
       description: '`reports.income_vs_expense`: an income or expense account''s net
@@ -22341,92 +22204,6 @@ components:
       required:
       - already_unlocked
       - unlocked_rows
-    Me:
-      type: object
-      description: |-
-        `/auth/me`: the user, plus the impersonation the session runs under (ADR-0037).
-
-        ``impersonation`` is null for a normal session. It is read from the request, which the
-        authenticator annotated after checking the grant, so it is never stale.
-      properties:
-        id:
-          type: string
-          format: uuid
-          readOnly: true
-        email:
-          type: string
-          format: email
-          readOnly: true
-        username:
-          type: string
-          readOnly: true
-          nullable: true
-          description: School-issued login for students without email.
-        first_name:
-          type: string
-          readOnly: true
-        last_name:
-          type: string
-          readOnly: true
-        full_name:
-          type: string
-          readOnly: true
-        phone:
-          type: string
-          readOnly: true
-        tenant:
-          type: string
-          format: uuid
-          readOnly: true
-          nullable: true
-        tenant_summary:
-          allOf:
-          - $ref: '#/components/schemas/TenantSummary'
-          readOnly: true
-          nullable: true
-        is_platform:
-          type: boolean
-          readOnly: true
-          description: Platform-scope principal (no tenant).
-        mfa_enabled:
-          type: boolean
-          readOnly: true
-        permissions:
-          type: array
-          items:
-            type: string
-          readOnly: true
-        roles:
-          type: array
-          items:
-            type: string
-          readOnly: true
-        is_restricted_principal:
-          type: boolean
-          description: A student or guardian, so a client routes them to the portal
-            rather than guessing.
-          readOnly: true
-        impersonation:
-          allOf:
-          - $ref: '#/components/schemas/ImpersonationSummary'
-          nullable: true
-          readOnly: true
-      required:
-      - email
-      - first_name
-      - full_name
-      - id
-      - impersonation
-      - is_platform
-      - is_restricted_principal
-      - last_name
-      - mfa_enabled
-      - permissions
-      - phone
-      - roles
-      - tenant
-      - tenant_summary
-      - username
     Message:
       type: object
       description: One message in a thread, as its participants read it.
@@ -24475,27 +24252,6 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/Tenant'
-        meta:
-          type: object
-          properties:
-            pagination:
-              type: object
-              properties:
-                page:
-                  type: integer
-                page_size:
-                  type: integer
-                total_count:
-                  type: integer
-                total_pages:
-                  type: integer
-    PaginatedTenantUserList:
-      type: object
-      properties:
-        data:
-          type: array
-          items:
-            $ref: '#/components/schemas/TenantUser'
         meta:
           type: object
           properties:
@@ -27709,68 +27465,30 @@ components:
       - enabled_modules
       - name
       - price_amount
-    PlatformJob:
+    PlatformReport:
       type: object
       properties:
-        id:
+        key:
           type: string
-          format: uuid
-          readOnly: true
-        job_type:
+        title:
           type: string
-          readOnly: true
-          description: e.g. 'import.students', 'export.students', 'id-cards.generate'.
-        status:
-          allOf:
-          - $ref: '#/components/schemas/BackgroundJobStatusEnum'
-          readOnly: true
-        progress:
-          type: integer
-          readOnly: true
-        result:
-          readOnly: true
-          nullable: true
-          description: Result summary, e.g. result_file_id.
-        error:
-          type: string
-          readOnly: true
-          nullable: true
-        started_at:
+        generated_at:
           type: string
           format: date-time
-          readOnly: true
-          nullable: true
-        finished_at:
-          type: string
-          format: date-time
-          readOnly: true
-          nullable: true
-        created_at:
-          type: string
-          format: date-time
-          readOnly: true
-        updated_at:
-          type: string
-          format: date-time
-          readOnly: true
-        download_url:
-          type: string
-          nullable: true
-          readOnly: true
-          description: A short-lived signed link to the result file once the job succeeded;
-            poll again for a fresh one.
+        sections:
+          type: object
+          additionalProperties:
+            type: array
+            items:
+              type: object
+              additionalProperties: {}
+          description: Named tables; every row of a section has the same keys (platform-admin
+            §7.9).
       required:
-      - created_at
-      - download_url
-      - error
-      - finished_at
-      - id
-      - job_type
-      - progress
-      - result
-      - started_at
-      - status
-      - updated_at
+      - generated_at
+      - key
+      - sections
+      - title
     PortalChild:
       type: object
       properties:
@@ -31177,6 +30895,11 @@ components:
           type: string
           format: date-time
           description: After the start.
+        acknowledge_over_usage:
+          type: boolean
+          default: false
+          description: A paid sign-up onto a plan whose limits are below the school's
+            latest usage snapshot goes ahead anyway; without it that is a 409 limit_below_usage.
       required:
       - current_period_end
       - current_period_start
@@ -31784,32 +31507,6 @@ components:
       - storage_bytes
       - students
       - taken_at
-    TenantUser:
-      type: object
-      description: 'A school user the console may impersonate: who, and their roles''
-        slugs.'
-      properties:
-        id:
-          type: string
-          format: uuid
-          readOnly: true
-        name:
-          type: string
-          readOnly: true
-        email:
-          type: string
-          format: email
-          readOnly: true
-        roles:
-          type: array
-          items:
-            type: string
-          readOnly: true
-      required:
-      - email
-      - id
-      - name
-      - roles
     Term:
       type: object
       properties:

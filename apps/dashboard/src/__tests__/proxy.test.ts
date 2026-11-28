@@ -75,6 +75,16 @@ describe("proxy", () => {
     expect(response.headers.get("location")).toBe("https://app.schoolhub.test/students");
   });
 
+  it.each(["//evil.example", "/\\evil.example"])(
+    "never follows %s, which a browser reads as another host",
+    (next) => {
+      const response = proxy(
+        makeRequest(`/login?next=${encodeURIComponent(next)}`, { session: true }),
+      );
+      expect(response.headers.get("location")).toBe("https://app.schoolhub.test/dashboard");
+    },
+  );
+
   it("never treats an off-site next param as a redirect target", () => {
     const response = proxy(makeRequest("/login?next=https://evil.example.com", { session: true }));
     expect(response.headers.get("location")).toBe("https://app.schoolhub.test/dashboard");

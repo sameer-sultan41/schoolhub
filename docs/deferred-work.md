@@ -61,10 +61,6 @@ either this file or `project-status.md`.
     /platform/tenants/{id}/subscription` (`limits_override`, `billing_provider`,
     `billing_provider_ref`, with its `acknowledge_over_usage` 409) is in the API; the Subscription
     tab shows the values but cannot edit them. The acknowledgement dialog is ready to reuse.
-  - **Report headings are the server's keys, humanised.** A section or column name
-    (`mrr_by_plan`, `plan_code`) reads "Mrr by plan", never translated, because the report
-    registry declares no labels the client could key on. Labels in `reports/registry.py`, or a
-    client map per report, would fix it.
   - **`quota_exceeded` on a school's own screens names no metric.** It shows the generic
     `errors.quota_exceeded`; `meta` carries `{metric, limit, usage}`, which `resolveErrorMessage`
     does not interpolate. A school screen that creates students or staff could say which limit.
@@ -75,10 +71,10 @@ either this file or `project-status.md`.
   - **A signed-in operator at `/login` or `/` takes one extra hop.** The proxy can't tell who is
     signed in (an opaque cookie), so it sends them to `/dashboard`, and `AudienceGate` then
     sends them to `/platform`.
-  - **An export's download link is fetched once.** The link from the job poll is short-lived;
-    after it expires the dialog must be reopened, which starts a new export rather than
-    re-polling the succeeded job for a fresh link.
   - **Recovery codes can be copied, not downloaded or printed.**
+  - **`toggle_refused` in Urdu names the flag but not the reason.** The server's reason is an
+    English sentence from the guard, so Urdu leaves it out rather than mix languages; a reason
+    code on the refusal would let both locales translate it.
 
 - **Platform scope (RBAC), what platform-admin PR A leaves out** (Task 1, `core/rbac/sync.py`,
   ADR-0036).
@@ -221,8 +217,11 @@ either this file or `project-status.md`.
   - **SMS-credit, AI-token and API-rate quotas.** Only `students`, `staff` and `storage_gb` are
     enforced; the others have no counter (the AI gateway keeps its own per-school budget).
   - **Platform-ops copies of `platform.quota-threshold`.** Owners only; `it_admin` and the
-    platform-ops channel of §12 wait for that channel. §12's 80 % is
-    `PLATFORM_QUOTA_WARN_RATIO` (0.9) as built.
+    platform-ops channel of §12 wait for that channel.
+  - **Two `meta.warnings` entry shapes.** `quota_warning` is `{code, message, details}`;
+    academics' older `teacher_over_norm` puts its fields beside `code`. `ApiMeta.warnings`
+    stays untyped until `teacher_over_norm` moves to the shared shape (or the type becomes a
+    union on `code`); clients read each entry by `code` meanwhile.
   - **A notice for a school already over its limit.** The notice fires on a crossing made by a
     create; a school pushed over by a lowered, acknowledged limit is told nothing until it next
     crosses a band in a new period.
@@ -241,21 +240,20 @@ either this file or `project-status.md`.
     guardians, fee balances and marks history get their own plan.
   - **No school-side export request.** Only an operator starts `:export`; multi-tenancy §7 also
     lets a school's own admins request one (a tenant route and key).
-  - **Downloading an export is not audited.** `:export` is audited when it is requested; each
-    poll that signs a link to the archive is not.
-  - **The export counts toward the school's storage.** The archive is one of the school's own
-    files (`platform.tenant-export`), so `storage_gb` includes it; `create_ready_file` is not
-    quota-checked (Task 7), so the export itself is never refused.
-  - **Export archives are never pruned,** and the redactions follow `EXPORT_DENIED_FIELDS`,
-    which drops `national_id`, `bank_account`, `iban` and `medical_notes` (the audit trail's
-    list) from the school's own data too; a portability export may want them back, behind a
-    separate key.
+  - **Export size bounds.** The whole archive is written to the worker's temporary disk, so
+    that disk must hold the largest school's export. `create_ready_file` does not enforce the
+    purpose's 50 GiB `max_size_bytes`, so nothing stops a larger archive.
+  - **SEC-16's per-user export throttle.** `:export` has none; the in-flight dedupe (one export
+    per school at a time) keeps the risk low.
+  - **Export archives are never pruned.**
   - **Report gaps against §13.** Time-to-active, dunning recovery rate, SMS and AI-token
     consumption, and the "support & health" report (impersonation counts, job-failure rates,
     onboarding funnel) are not built: they need data no snapshot holds yet. Quota pressure
     reads plan limits only, not a school's `limits_override` (under its RLS boundary). Churn
     is dated from `deprovision_after - PLATFORM_RETENTION_DAYS`, so a changed retention
-    setting shifts past months. Scheduled report delivery (§13) is not built.
+    setting shifts past months. Scheduled report delivery (§13) is not built. The revenue report's `paying_tenants`
+    counts past-due schools too (documented in platform-admin §7.9 rather than renamed, so the
+    console's column keeps its name); a `billed_tenants` rename is open if it misleads.
   - **Impersonation, what PR E's API leaves out** (platform-admin §7.3,
     [ADR-0037](decisions/0037-impersonation-grants.md)):
     - **No tenant-visible impersonation log** (§7.3 and §19, a recommendation). Owners get the

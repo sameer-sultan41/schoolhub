@@ -185,12 +185,15 @@ def subscribe(
     period_start: datetime,
     period_end: datetime,
     actor_id: uuid.UUID | None,
+    acknowledge_over_usage: bool = False,
 ) -> Subscription:
     """An ``active`` subscription to plan ``plan_code`` for a school that has none (a paid sign-up).
 
     A school on a trial without a plan, or one that predates plans, pays and goes straight to
     ``active``. A trial school becomes ``active``; a suspended one stays suspended until it is
-    reinstated, which then follows this subscription.
+    reinstated, which then follows this subscription. A school without a plan is unlimited, so
+    a plan whose limits fall below its latest usage snapshot is a 409 `limit_below_usage`
+    unless acknowledged.
     """
     _check_period(period_start, period_end)
     with _writing(tenant.pk) as school:
@@ -200,6 +203,12 @@ def subscribe(
         if _live_row(lock=False) is not None:
             raise SubscriptionExists()
         _refuse_guarded_drop(school, plan)
+        refuse_below_usage(
+            dict.fromkeys(QUOTA_METRICS),
+            _merged_limits(plan.limits, None),
+            latest_snapshots([school.pk]),
+            acknowledged=acknowledge_over_usage,
+        )
         sub = Subscription.objects.create(
             tenant=school,
             plan=plan,

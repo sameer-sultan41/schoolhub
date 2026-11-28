@@ -255,6 +255,7 @@ export type {
   ChangePlanInput,
   DeleteTenantInput,
   ExportAccepted,
+  ExportDownload,
   FeatureFlagRecord,
   FeatureFlagUpdateInput,
   FeatureOverrideInput,

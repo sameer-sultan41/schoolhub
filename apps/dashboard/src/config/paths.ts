@@ -1,3 +1,5 @@
+import { safeNextPath } from "@/lib/safe-next-path";
+
 /**
  * Every dashboard page path, in one place — grouped the same way `lib/regex.ts` groups
  * this app's regex patterns, so the two "one named object, not scattered literals"
@@ -104,11 +106,13 @@ export const Paths = {
 /** Where an impersonated tab lands once its session is over: ended, released or expired. */
 export const impersonationEndedPath = () => `${Paths.IMPERSONATE}?ended=1`;
 
-/** The second-factor page, carrying a same-origin `next` through (never an off-site one). */
-export const mfaVerifyPath = (next?: string | null) =>
-  next?.startsWith("/")
-    ? `${Paths.MFA_VERIFY}?${new URLSearchParams({ next }).toString()}`
+/** The second-factor page, carrying a safe `next` through (`safeNextPath`), else none. */
+export const mfaVerifyPath = (next?: string | null) => {
+  const safe = safeNextPath(next);
+  return safe
+    ? `${Paths.MFA_VERIFY}?${new URLSearchParams({ next: safe }).toString()}`
     : Paths.MFA_VERIFY;
+};
 
 /** One school's page in the platform console. */
 export const platformTenantPath = (tenantId: string) => `${Paths.PLATFORM_TENANTS}/${tenantId}`;

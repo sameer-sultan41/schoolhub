@@ -116,6 +116,18 @@ describe("MfaVerifyForm", () => {
     expect(auth.verifyMfa.mock.calls[0]?.[0]).toEqual({ code: "123456" });
   });
 
+  it("never sends the operator to a next a browser reads as another host", async () => {
+    mockGet.mockReturnValue("/\\evil.example");
+    auth.verifyMfa.mockResolvedValue({ access_token: "at", expires_in: 900, user: operator });
+    renderWithProviders(<MfaVerifyForm />);
+
+    await submitCode("123456");
+
+    await waitFor(() => {
+      expect(mockReplace).toHaveBeenCalledWith("/platform");
+    });
+  });
+
   it("honours a same-origin next, and takes a recovery code instead", async () => {
     mockGet.mockReturnValue("/platform/plans");
     auth.verifyMfa.mockResolvedValue({ access_token: "at", expires_in: 900, user: operator });

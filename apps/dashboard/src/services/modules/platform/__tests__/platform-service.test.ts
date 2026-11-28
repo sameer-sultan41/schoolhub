@@ -84,16 +84,24 @@ describe("platform-service", () => {
     });
   });
 
-  it("starts an export and reads its job id out of the 202", async () => {
-    const { exportTenant, fetchTenantJob } = await service();
-    mockPost.mockResolvedValue({ data: { job_id: "job-1", status: "queued" } });
-    mockGet.mockResolvedValue({ data: { id: "job-1", status: "running" } });
+  it("starts an export, polls its job, and mints a download link with :download", async () => {
+    const { downloadTenantExport, exportTenant, fetchTenantJob } = await service();
+    mockPost.mockResolvedValueOnce({ data: { job_id: "job-1", status: "queued" } });
+    mockGet.mockResolvedValue({ data: { id: "job-1", status: "succeeded" } });
+    mockPost.mockResolvedValueOnce({
+      data: { download_url: "https://storage.test/export.zip", expires_in: 300 },
+    });
 
-    await expect(exportTenant(ID, KEY)).resolves.toEqual({ jobId: "job-1" });
+    await expect(exportTenant(ID, KEY)).resolves.toEqual({ job_id: "job-1", status: "queued" });
     await fetchTenantJob(ID, "job-1");
+    await expect(downloadTenantExport(ID, "job-1")).resolves.toEqual({
+      download_url: "https://storage.test/export.zip",
+      expires_in: 300,
+    });
 
-    expect(mockPost).toHaveBeenCalledWith(`/platform/tenants/${ID}:export`, undefined, KEY);
+    expect(mockPost).toHaveBeenNthCalledWith(1, `/platform/tenants/${ID}:export`, undefined, KEY);
     expect(mockGet).toHaveBeenCalledWith(`/platform/tenants/${ID}/jobs/job-1`);
+    expect(mockPost).toHaveBeenNthCalledWith(2, `/platform/tenants/${ID}/jobs/job-1:download`);
   });
 
   it("refreshes usage with :refresh-usage, and reads it from /usage", async () => {
@@ -113,7 +121,11 @@ describe("platform-service", () => {
       current_period_end: "2027-01-01T00:00:00Z",
     };
 
-    await svc.activateSubscription(ID, { plan_code: "std", ...period }, KEY);
+    await svc.activateSubscription(
+      ID,
+      { plan_code: "std", ...period, acknowledge_over_usage: false },
+      KEY,
+    );
     await svc.recordPayment(ID, { paid_through: "2027-02-01T00:00:00Z" }, KEY);
     await svc.markPaymentFailed(ID, KEY);
     await svc.changePlan(ID, { plan_code: "pro", acknowledge_over_usage: true }, KEY);
@@ -121,7 +133,7 @@ describe("platform-service", () => {
     expect(mockPost).toHaveBeenNthCalledWith(
       1,
       `/platform/tenants/${ID}/subscription:activate`,
-      { plan_code: "std", ...period },
+      { plan_code: "std", ...period, acknowledge_over_usage: false },
       KEY,
     );
     expect(mockPost).toHaveBeenNthCalledWith(
@@ -158,6 +170,22 @@ describe("platform-service", () => {
       reason: "pilot",
     });
     expect(mockDelete).toHaveBeenCalledWith(`/platform/tenants/${ID}/feature-overrides/ov-1`);
+  });
+
+  it("reads every page of the plans and flags a picker offers, not only the first", async () => {
+    const { fetchActivePlans, fetchAllFlags } = await service();
+    const page = (n: number, item: string) => ({
+      data: [{ id: item }],
+      meta: { pagination: { page: n, page_size: 100, total_count: 2, total_pages: 2 } },
+    });
+    mockGet
+      .mockResolvedValueOnce(page(1, "p1"))
+      .mockResolvedValueOnce(page(2, "p2"))
+      .mockResolvedValueOnce(page(1, "f1"))
+      .mockResolvedValueOnce(page(2, "f2"));
+
+    await expect(fetchActivePlans()).resolves.toEqual([{ id: "p1" }, { id: "p2" }]);
+    await expect(fetchAllFlags()).resolves.toEqual([{ id: "f1" }, { id: "f2" }]);
   });
 
   it("lists active plans for a picker and patches, retires and creates plans", async () => {

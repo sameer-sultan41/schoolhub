@@ -1,8 +1,8 @@
 """The platform console's side of `core.tenancy.quotas`: the threshold notice (§12).
 
 `hooks.register()` registers the limits (`subscriptions.services.effective_limits`), the
-counters (`usage.services.USAGE_COUNTERS`) and `threshold_reached`. The notice is queued on
-commit, so a write that is rolled back sends nothing.
+counters (`usage.services`' students, staff and storage bytes) and `threshold_reached`.
+The notice is queued on commit, so a write that is rolled back sends nothing.
 """
 
 from __future__ import annotations

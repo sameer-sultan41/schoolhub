@@ -4,6 +4,7 @@ import { matchesPath } from "@/lib/active-path";
 import { Cookies } from "@/lib/cookies";
 import { env } from "@/lib/env";
 import { parseTenantSlug } from "@/lib/host";
+import { safeNextPath } from "@/lib/safe-next-path";
 
 /**
  * Auth guard. (Next 16 renamed the `middleware` convention to `proxy`.)
@@ -66,7 +67,7 @@ export function proxy(request: NextRequest): NextResponse {
   // to go.
   if (hasSession && (isPublicPath(pathname) || pathname === "/")) {
     const nextParam = request.nextUrl.searchParams.get("next");
-    const target = nextParam?.startsWith("/") ? nextParam : Paths.DASHBOARD;
+    const target = safeNextPath(nextParam) ?? Paths.DASHBOARD;
     return NextResponse.redirect(new URL(target, request.url));
   }
 

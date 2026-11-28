@@ -99,6 +99,12 @@
   `TextChoices` values) did not clear it. CI's `typecheck` log named the real error at once:
   an unannotated `extra_kwargs = {"code": {"validators": []}}` (`[var-annotated]`). Read the
   error from CI (`gh run view <id> --log-failed`) rather than guessing.
+- **Mistake (again, platform-admin PR C).** CI's mypy rejected two typed shapes the code took
+  for granted: Task 6 compared `int | None` limits without narrowing them, and Task 8's
+  `PlatformJobSerializer.Meta` extended its base `Meta.fields`, a fixed-length tuple type, with
+  one more name (`[assignment]`). Both were fixed from the `typecheck` log (`8d8c3df4`,
+  `8958de51`): narrow before comparing, and declare a subclass's `Meta` on its own with
+  `fields: tuple[str, ...]`.
 - **Check.** Apply the fix the hook prints, on exactly the files it lists. The hooks run ruff,
   eslint and prettier; never run them yourself. The pre-commit checks only report, so edit the
   named files by hand, re-stage them and commit again. Delete an unused `noqa` rather than re-adding it, reword a flagged word rather than growing `.cspell/project-words.txt`, and never use `--no-verify`. Keep the reason a removed `noqa` carried as a plain comment. When a hook prints no detail (the pre-push mypy check), run the command it names once and read the error before editing; two guessed fixes in a row failed before the real cause (a class variable overridden by an annotated attribute) was read.
@@ -541,7 +547,7 @@
 ### L74. A guard on one write covers every write that makes the same change
 
 - **Mistake.** Platform-admin PR B Task 5 registered attendance's `module.timetable` disable guard on the flag-override writes only, and closed the deferred-work item. A plan change, a paid sign-up and a trial onto a plan without the module switched it off for the same school, unguarded (`e6061eb8`).
-- **Mistake (again).** PR C Task 6 asked `limit_below_usage` on a plan's limits and a school's `limits_override`, but not on `:change-plan`, the third write that lowers a school's effective limits (fixed in `342dba65`).
+- **Mistake (again).** PR C Task 6 asked `limit_below_usage` on a plan's limits and a school's `limits_override`, but not on `:change-plan` (fixed in `342dba65`), nor on a paid sign-up (`subscribe`, through `:activate`), which gives a school with no plan its first limits. That made four writes that lower a school's effective limits, not three; the fourth was caught in PR C's final review.
 - **Check.** Before closing a rule, list every write that reaches the same end state (here: anything that changes how a flag resolves for a school: overrides, plans, defaults) and either guard each or name the unguarded ones in `docs/deferred-work.md`.
 
 ### L75. A throttle keyed on a public value counts only verified requests
@@ -559,17 +565,32 @@
 - **Mistake.** Platform-admin PR C Task 8 pushed its implementation (`58ff793c`) while the RED commit's api run was still testing. Each workflow's `concurrency` group is `ci-${{ github.ref }}` with `cancel-in-progress: true`, so the RED `test` job was cancelled and left no failure to cite (run 45171828463).
 - **Check.** After pushing failing tests, `gh run watch <id>` on the `api` (or `frontend`) run until its `test` job has a conclusion, and record that run id, before the next push to the branch.
 
-### L78. A RED across packages proves only the packages Turbo reached
+### L78. A new error code goes in three places in one commit
+
+- **Mistake.** Platform-admin PR C added error codes the server emits (`limit_below_usage`, then `quota_exceeded`) and missed a place each time: `quota_exceeded` was emitted for a task before `packages/types/src/api.ts` listed it (`3e07f908`), and the contract test's mirror must be kept in step by hand.
+- **Check.** When a `CodedAPIException` gets a new `default_code`, add it in the same commit to `API_ERROR_CODES` in `packages/types/src/api.ts` (with a comment naming the status and `meta`), to the mirror list in `apps/api/tests/test_api_contract.py`, and to the emitted-exception imports in that same test (beside `LimitBelowUsage`), so the test sees the code the server raises.
+
+### L79. A RED across packages proves only the packages Turbo reached
 
 - **Mistake.** Platform-admin PR D's RED commit (`0d4c23be`) failed tests in two packages. Turbo stops the task graph at the first failing task, so frontend run 45329263477 reported only `@schoolhub/api-client`'s failure; the dashboard suite started and never reported, and its five RED tests had no evidence until a second push made api-client green (run 45330441484).
 - **Check.** In the RED run's `Test (coverage)` log, find a `Tests:` summary for every package the commit touches. If one is missing, the RED is unproven there: push the earlier package's fix alone, wait for the run, and cite the run that shows each package's failures.
 
-### L79. A pipeline hides a hook's rejection, and `git commit` takes every staged path
+### L80. A pipeline hides a hook's rejection, and `git commit` takes every staged path
 
 - **Mistake.** Platform-admin PR D ran `git commit --amend ... | tail`; cspell rejected the amend, but the pipeline's status was `tail`'s, so the push went ahead with the unfixed commit. Later a plain `git commit` swept two renames `git mv` had staged into an unrelated commit, without their importers (caught by `git show --stat` before the push).
 - **Check.** Commit with `git commit -- <paths>` and test the exit status on its own (no pipe, or `${pipestatus[1]}` in zsh). Before every push, `git show --stat` each new commit and confirm it holds only the files it names.
 
-### L81. A guard that the first failure clears does not cover the failures after it
+### L81. An Idempotency-Key covers one attempt: a failed attempt needs a new key
+
+- **Mistake.** Platform-admin PR D's export panel (`tenant-export-panel.tsx`) kept one key for the dialog's life. `:export` runs under `run_idempotent`, which replays a key's first 202, so after the job failed, "Export first" got the failed job back and the operator was stuck until they reopened Delete (review, Important 1).
+- **Check.** For any `Idempotency-Key` held across clicks, ask what the server replays for it. Mint a new key once the attempt it covered has ended, in success or in a failed job, and pin it with a test that the retry's key differs.
+
+### L82. A `next` target is safe only if it resolves to your own origin
+
+- **Mistake.** PR D carried the login's `next?.startsWith("/")` check into the MFA step. `//evil.example` and `/\evil.example` both pass it, and a browser reads them as another host, so a phishing `next` survived password and TOTP (review, Important 2).
+- **Check.** Pass every redirect target through `safeNextPath` (`apps/dashboard/src/lib/safe-next-path.ts`), which resolves it against a sentinel origin with the URL parser and requires the origin unchanged. Never hand-write a `startsWith("/")` check.
+
+### L83. A guard that the first failure clears does not cover the failures after it
 
 - **Mistake.** Platform-admin PR E (Task 11): the "never refresh an impersonated tab" flag was cleared by the first 401's handler. `ApiClient` shares one refresh only among 401s inside one microtask, so a later 401 found no flag and no token and called the real refresh (change review of `232eb61a`; fixed in `a23fb2b3`).
 - **Check.** For a guard on a failure path, ask what the second, third and still-in-flight failure see after the first one's cleanup. Clear the guard only on the event that makes it untrue (here a normal sign-in), and test a second call after the first handler ran.

@@ -85,6 +85,7 @@ describe("the tenant's tabs", () => {
       planRecord({ id: "b1", code: "basic", name: "Basic" }),
     ]);
     platform.fetchAllFlags.mockResolvedValue([]);
+    platform.fetchTenant.mockResolvedValue(tenantRecord());
   });
 
   describe("Subscription", () => {
@@ -121,10 +122,56 @@ describe("the tenant's tabs", () => {
             plan_code: "standard",
             current_period_start: new Date("2026-12-01T00:00").toISOString(),
             current_period_end: new Date("2027-01-01T00:00").toISOString(),
+            acknowledge_over_usage: false,
           },
           KEY,
         );
       });
+    });
+
+    it("asks before a paid sign-up below usage, then resends acknowledged under its own key", async () => {
+      platform.fetchSubscription.mockResolvedValue({
+        tenant_status: "trial",
+        trial_ends_at: null,
+        subscription: null,
+        limits: LIMITS,
+      });
+      platform.activateSubscription
+        .mockRejectedValueOnce(
+          apiError(409, "limit_below_usage", "Below usage.", {
+            meta: {
+              over_usage: [{ tenant_id: TENANT_ID, metric: "students", limit: 100, usage: 320 }],
+            },
+          }),
+        )
+        .mockResolvedValueOnce(subscription("active"));
+      const user = renderTab(<TenantSubscriptionTab tenant={tenantRecord()} />);
+
+      await user.click(await screen.findByRole("button", { name: "Activate" }));
+      const dialog = await screen.findByRole("dialog");
+      await user.click(within(dialog).getByRole("combobox", { name: "Plan" }));
+      await user.click(await screen.findByRole("option", { name: "Basic" }));
+      fireEvent.change(within(dialog).getByLabelText("Period starts"), {
+        target: { value: "2026-12-01T00:00" },
+      });
+      fireEvent.change(within(dialog).getByLabelText("Period ends"), {
+        target: { value: "2027-01-01T00:00" },
+      });
+      await user.click(within(dialog).getByRole("button", { name: "Activate subscription" }));
+
+      const confirm = await screen.findByRole("alertdialog");
+      expect(within(confirm).getByText(/students: 320 in use, new limit 100/i)).toBeInTheDocument();
+      await user.click(within(confirm).getByRole("button", { name: "Save anyway" }));
+
+      await waitFor(() => {
+        expect(platform.activateSubscription).toHaveBeenCalledTimes(2);
+      });
+      const [first, second] = platform.activateSubscription.mock.calls;
+      expect(first?.[1]).toEqual(expect.objectContaining({ acknowledge_over_usage: false }));
+      expect(second?.[1]).toEqual(
+        expect.objectContaining({ plan_code: "basic", acknowledge_over_usage: true }),
+      );
+      expect(second?.[2]).not.toEqual(first?.[2]);
     });
 
     it("shows subscription_exists inline", async () => {
@@ -202,6 +249,8 @@ describe("the tenant's tabs", () => {
 
       const confirm = await screen.findByRole("alertdialog");
       expect(within(confirm).getByText(/staff: 42 in use, new limit 10/i)).toBeInTheDocument();
+      // `meta.over_usage` carries only the tenant id; the dialog names the school.
+      expect(await within(confirm).findByText("City School")).toBeInTheDocument();
       await user.click(within(confirm).getByRole("button", { name: "Save anyway" }));
 
       await waitFor(() => {

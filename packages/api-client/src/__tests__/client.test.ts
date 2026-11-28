@@ -1,6 +1,6 @@
 import { ApiClient, buildQueryString } from "../client";
 import { ApiError } from "../errors";
-import { collectPages } from "../pagination";
+import { collectNumberedPages, collectPages } from "../pagination";
 
 function jsonResponse(body: unknown, init: ResponseInit = {}): Response {
   // Headers is a class, not a plain object — init.headers may be a real Headers instance
@@ -385,5 +385,42 @@ describe("ApiClient.downloadBlob", () => {
       status: 404,
     });
     await expect(client.downloadBlob("/receipts/x/download")).rejects.toBeInstanceOf(ApiError);
+  });
+});
+
+describe("collectNumberedPages", () => {
+  function numberedPage(items: string[], page: number, totalPages: number): Response {
+    return jsonResponse({
+      data: items,
+      meta: { pagination: { page, page_size: 2, total_count: 3, total_pages: totalPages } },
+    });
+  }
+
+  it("walks page numbers to the last page the server reports", async () => {
+    const fetchImpl = jest
+      .fn()
+      .mockResolvedValueOnce(numberedPage(["a", "b"], 1, 2))
+      .mockResolvedValueOnce(numberedPage(["c"], 2, 2));
+    const client = new ApiClient({ baseUrl: "https://api.test/api/v1", fetchImpl });
+
+    await expect(
+      collectNumberedPages<string>(client, "/platform/plans", { query: { is_active: true } }),
+    ).resolves.toEqual(["a", "b", "c"]);
+    expect(fetchImpl).toHaveBeenCalledTimes(2);
+    const second = String(fetchImpl.mock.calls[1]?.[0]);
+    expect(new URL(second).searchParams.get("page")).toBe("2");
+    expect(new URL(second).searchParams.get("is_active")).toBe("true");
+  });
+
+  it("stops at maxPages", async () => {
+    // A fresh Response per call: a body can be read only once.
+    const fetchImpl = jest
+      .fn()
+      .mockImplementation(() => Promise.resolve(numberedPage(["a"], 1, 9)));
+    const client = new ApiClient({ baseUrl: "https://api.test/api/v1", fetchImpl });
+
+    await collectNumberedPages<string>(client, "/x", { maxPages: 3 });
+
+    expect(fetchImpl).toHaveBeenCalledTimes(3);
   });
 });

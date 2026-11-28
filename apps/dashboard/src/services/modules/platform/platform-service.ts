@@ -1,4 +1,4 @@
-import { fetchPage, MAX_PAGE_SIZE, type Page } from "@schoolhub/api-client";
+import { collectNumberedPages, fetchPage, MAX_PAGE_SIZE, type Page } from "@schoolhub/api-client";
 import { apiClient } from "@/lib/auth";
 import { endpoints } from "@/services/endpoints";
 import {
@@ -12,6 +12,7 @@ import type {
   ChangePlanInput,
   DeleteTenantInput,
   ExportAccepted,
+  ExportDownload,
   FeatureFlagRecord,
   FeatureFlagUpdateInput,
   FeatureOverrideInput,
@@ -109,16 +110,31 @@ export function restoreTenant(id: string, input: ReasonInput, options: ActionOpt
 
 /** Starts (or rejoins) the school's export job; `202 {job_id, status}`. */
 export async function exportTenant(id: string, options: ActionOptions): Promise<ExportAccepted> {
-  const { data } = await apiClient.post<{ job_id: string }>(
+  const { data } = await apiClient.post<ExportAccepted>(
     endpoints.platform.tenantAction(id, "export"),
     undefined,
     { idempotencyKey: options.idempotencyKey },
   );
-  return { jobId: data.job_id };
+  return data;
 }
 
+/** Polls one of the school's platform jobs. The answer carries no link. */
 export async function fetchTenantJob(tenantId: string, jobId: string): Promise<PlatformJob> {
   const { data } = await apiClient.get<PlatformJob>(endpoints.platform.tenantJob(tenantId, jobId));
+  return data;
+}
+
+/**
+ * A fresh signed link to a succeeded export, audited per call on the server. 409 `conflict`
+ * until the job has succeeded.
+ */
+export async function downloadTenantExport(
+  tenantId: string,
+  jobId: string,
+): Promise<ExportDownload> {
+  const { data } = await apiClient.post<ExportDownload>(
+    endpoints.platform.tenantJobDownload(tenantId, jobId),
+  );
   return data;
 }
 
@@ -250,12 +266,11 @@ export async function fetchPlanPage(query: PlanPageQuery): Promise<Page<PlanReco
   });
 }
 
-/** The active plans a school can trial on or move to, for a picker (one full page). */
+/** Every active plan a school can trial on or move to, for a picker (every page). */
 export async function fetchActivePlans(): Promise<PlanRecord[]> {
-  const page = await fetchPage<PlanRecord>(apiClient, endpoints.platform.plans, {
+  return collectNumberedPages<PlanRecord>(apiClient, endpoints.platform.plans, {
     query: { is_active: true, ordering: "name", page_size: MAX_PAGE_SIZE },
   });
-  return page.items;
 }
 
 export async function createPlan(input: PlanInput): Promise<PlanRecord> {
@@ -281,12 +296,11 @@ export async function fetchFlagPage(query: PlatformPageQuery): Promise<Page<Feat
   });
 }
 
-/** Every flag, for a plan's module picker and an override's flag picker (one full page). */
+/** Every flag, for a plan's module picker and an override's flag picker (every page). */
 export async function fetchAllFlags(): Promise<FeatureFlagRecord[]> {
-  const page = await fetchPage<FeatureFlagRecord>(apiClient, endpoints.platform.featureFlags, {
+  return collectNumberedPages<FeatureFlagRecord>(apiClient, endpoints.platform.featureFlags, {
     query: { ordering: "key", page_size: MAX_PAGE_SIZE },
   });
-  return page.items;
 }
 
 export async function updateFlag(

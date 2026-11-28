@@ -534,6 +534,8 @@ export const endpoints = {
     tenant: (id: string) => `/platform/tenants/${id}`,
     tenantAction: (id: string, action: string) => `/platform/tenants/${id}:${action}`,
     tenantJob: (id: string, jobId: string) => `/platform/tenants/${id}/jobs/${jobId}`,
+    tenantJobDownload: (id: string, jobId: string) =>
+      `/platform/tenants/${id}/jobs/${jobId}:download`,
     tenantUsage: (id: string) => `/platform/tenants/${id}/usage`,
     /** The school's users the console may impersonate (`?q=&role=`). */
     tenantUsers: (id: string) => `/platform/tenants/${id}/users`,

@@ -4,15 +4,24 @@ from __future__ import annotations
 
 import csv
 import io
+import time
+import uuid
 import zipfile
+from concurrent.futures import Future, ThreadPoolExecutor
+from datetime import timedelta
 from unittest import mock
 
 from django.apps import apps as django_apps
-from django.db import models
+from django.conf import settings
+from django.db import connection, connections, models
+from django.test import SimpleTestCase, TransactionTestCase
+from django.utils import timezone
 from rest_framework import status
 
 from apps.platform_admin.constants import TENANT_EXPORT_JOB_TYPE
+from apps.platform_admin.export import services as export_services
 from apps.platform_admin.export.services import EXPORT_DENIED_FIELDS
+from apps.platform_admin.export.tasks import export_tenant
 from apps.platform_admin.tests.base import (
     PlatformAPITestCase,
     bearer,
@@ -23,13 +32,14 @@ from apps.platform_admin.tests.base import (
 from apps.platform_admin.tests.test_usage import populate
 from apps.platform_admin.uploads import TENANT_EXPORT
 from apps.school_organization.tests.factories import UserFactory, grant
+from apps.staff_management.models import EmploymentStatus, Staff
 from apps.student_management.models import Student, StudentStatus
-from core.audit.services import _REDACTED_FIELDS
+from core.audit.models import AuditLog
 from core.files.models import File
 from core.files.storage import NullPresigner
 from core.files.tests.factories import FileFactory
 from core.jobs.models import BackgroundJob, JobStatus
-from core.tenancy.context import tenant_context
+from core.tenancy.context import tenant_atomic, tenant_context
 from core.tenancy.models import Tenant, TenantStatus
 from core.tenancy.rls import tenant_owned_tables
 
@@ -38,6 +48,28 @@ S = TenantStatus
 
 def jobs_url(tenant: Tenant, job_id) -> str:
     return tenant_url(tenant, f"/jobs/{job_id}")
+
+
+def download_url(tenant: Tenant, job_id) -> str:
+    return tenant_url(tenant, f"/jobs/{job_id}:download")
+
+
+#: Credentials and secrets: never portable data, so no export carries them (user ruling).
+CREDENTIAL_FIELDS = {
+    "password",
+    "token",
+    "refresh",
+    "access",
+    "secret",
+    "api_key",
+    "otp",
+    "cvv",
+    "token_hash",
+    "mfa_secret",
+    "code_hash",
+    "credentials_ciphertext",
+    "callback_token",
+}
 
 
 class ExportTests(PlatformAPITestCase):
@@ -134,18 +166,7 @@ class ExportTests(PlatformAPITestCase):
 
         self.export(tenant)
 
-        self.assertTrue(_REDACTED_FIELDS <= EXPORT_DENIED_FIELDS)
-        self.assertTrue(
-            {
-                "password",
-                "token_hash",
-                "mfa_secret",
-                "code_hash",
-                "credentials_ciphertext",
-                "callback_token",
-            }
-            <= EXPORT_DENIED_FIELDS
-        )
+        self.assertEqual(EXPORT_DENIED_FIELDS, CREDENTIAL_FIELDS)
         archive = self.archive()
         binary_columns = {
             field.attname
@@ -164,7 +185,27 @@ class ExportTests(PlatformAPITestCase):
         self.assertNotIn(user.password, users)
         self.assertNotIn("encrypted-totp-secret", users)
 
-    def test_poll_returns_the_job_and_a_download_link(self) -> None:
+    def test_export_keeps_the_school_s_personal_records(self) -> None:
+        tenant = make_tenant(status=S.ACTIVE)
+        populate(tenant, students=[StudentStatus.ACTIVE], staff=[EmploymentStatus.ACTIVE])
+        with tenant_context(tenant.pk):
+            Student.objects.update(medical_notes="Asthma")
+            Staff.objects.update(national_id="35202-1234567-1")
+
+        self.export(tenant)
+
+        archive = self.archive()
+        # The school owns these; the archive is protected by gating and an audited download.
+        (student,) = self.rows(archive, "students")
+        self.assertEqual(student["medical_notes"], "Asthma")
+        (staff,) = self.rows(archive, "staff")
+        self.assertEqual(staff["national_id"], "35202-1234567-1")
+        self.assertFalse(
+            {"national_id", "medical_notes", "bank_account", "iban", "photo_url"}
+            & EXPORT_DENIED_FIELDS
+        )
+
+    def test_poll_returns_the_job_without_a_link(self) -> None:
         tenant = make_tenant(status=S.ACTIVE)
         job_id = self.export(tenant).json()["data"]["job_id"]
 
@@ -175,7 +216,132 @@ class ExportTests(PlatformAPITestCase):
         self.assertEqual(data["id"], job_id)
         self.assertEqual(data["job_type"], TENANT_EXPORT_JOB_TYPE)
         self.assertEqual(data["status"], JobStatus.SUCCEEDED)
+        # A link is minted only by the audited `:download`.
+        self.assertNotIn("download_url", data)
+
+    def test_download_mints_a_link_and_audits_who_took_which_job(self) -> None:
+        tenant = make_tenant(status=S.ACTIVE)
+        job_id = self.export(tenant).json()["data"]["job_id"]
+        with tenant_context(tenant.pk):
+            file_id = BackgroundJob.objects.get(pk=job_id).result["result_file_id"]
+
+        response = self.client.post(download_url(tenant, job_id))
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.content)
+        data = response.json()["data"]
         self.assertIn(f"tenants/{tenant.pk}/", data["download_url"])
+        self.assertEqual(data["expires_in"], 300)
+        row = AuditLog.objects.get(action="export_download")
+        self.assertEqual(row.tenant_id, tenant.pk)
+        self.assertEqual(row.actor_id, self.operator.pk)
+        self.assertEqual(row.after["job_id"], job_id)
+        self.assertEqual(row.after["file_id"], file_id)
+
+        # Each download is its own audited event.
+        self.client.post(download_url(tenant, job_id))
+        self.assertEqual(AuditLog.objects.filter(action="export_download").count(), 2)
+
+    def test_download_before_success_is_409_and_unaudited(self) -> None:
+        tenant = make_tenant(status=S.ACTIVE)
+        with tenant_context(tenant.pk):
+            running = BackgroundJob.objects.create(
+                tenant=tenant, job_type=TENANT_EXPORT_JOB_TYPE, status=JobStatus.RUNNING
+            )
+
+        response = self.client.post(download_url(tenant, running.pk))
+
+        self.assert_error(response, status.HTTP_409_CONFLICT, "conflict")
+        self.assertFalse(AuditLog.objects.filter(action="export_download").exists())
+
+    def test_download_of_another_school_s_job_404(self) -> None:
+        mine, theirs = make_tenant(status=S.ACTIVE), make_tenant(status=S.ACTIVE)
+        job_id = self.export(theirs).json()["data"]["job_id"]
+
+        response = self.client.post(download_url(mine, job_id))
+
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+        self.sign_in_as(platform_user("platform_support"))
+        self.assertEqual(
+            self.client.post(download_url(theirs, job_id)).status_code,
+            status.HTTP_403_FORBIDDEN,
+        )
+        self.assertFalse(AuditLog.objects.filter(action="export_download").exists())
+
+    def test_a_succeeded_export_is_audited_with_its_counts(self) -> None:
+        tenant = make_tenant(status=S.ACTIVE)
+        populate(tenant, students=[StudentStatus.ACTIVE, StudentStatus.ACTIVE], files=[10])
+
+        job_id = self.export(tenant).json()["data"]["job_id"]
+
+        row = AuditLog.objects.get(action="export_succeeded")
+        self.assertEqual(row.tenant_id, tenant.pk)
+        self.assertIsNone(row.actor_id)
+        self.assertEqual(str(row.resource_id), job_id)
+        with tenant_context(tenant.pk):
+            result = BackgroundJob.objects.get(pk=job_id).result
+        self.assertEqual(
+            row.after,
+            {
+                "tables": result["tables"],
+                "rows": result["rows"],
+                "files": 1,
+                "missing_files": [],
+            },
+        )
+        self.assertGreaterEqual(row.after["rows"], 2)
+
+    def test_a_missing_stored_object_is_listed_not_fatal(self) -> None:
+        tenant = make_tenant(status=S.ACTIVE)
+        populate(tenant, files=[10, 20])
+        with tenant_context(tenant.pk):
+            lost, kept = File.objects.order_by("pk")
+
+        def open_object(_presigner, *, storage_key: str):
+            if storage_key == lost.storage_key:
+                raise FileNotFoundError(storage_key)
+            return io.BytesIO(b"bytes")
+
+        with mock.patch.object(NullPresigner, "open", autospec=True, side_effect=open_object):
+            job_id = self.export(tenant).json()["data"]["job_id"]
+
+        with tenant_context(tenant.pk):
+            job = BackgroundJob.objects.get(pk=job_id)
+        self.assertEqual(job.status, JobStatus.SUCCEEDED, job.error)
+        self.assertEqual(job.result["missing_files"], [str(lost.pk)])
+        self.assertEqual(job.result["files"], 1)
+        names = self.archive().namelist()
+        self.assertIn(f"files/{kept.pk}-{kept.original_name}", names)
+        self.assertNotIn(f"files/{lost.pk}-{lost.original_name}", names)
+
+    def test_a_stale_job_is_failed_and_replaced(self) -> None:
+        limit = timedelta(seconds=settings.PLATFORM_EXPORT_TIME_LIMIT_SECONDS)
+        long_ago = timezone.now() - limit - timedelta(minutes=1)
+        for stuck_status in (JobStatus.RUNNING, JobStatus.QUEUED):
+            with self.subTest(status=stuck_status):
+                tenant = make_tenant(status=S.ACTIVE)
+                with tenant_context(tenant.pk):
+                    stuck = BackgroundJob.objects.create(
+                        tenant=tenant,
+                        job_type=TENANT_EXPORT_JOB_TYPE,
+                        status=stuck_status,
+                        started_at=long_ago if stuck_status == JobStatus.RUNNING else None,
+                    )
+                    BackgroundJob.objects.filter(pk=stuck.pk).update(created_at=long_ago)
+
+                response = self.export(tenant)
+
+                self.assertEqual(response.status_code, status.HTTP_202_ACCEPTED, response.content)
+                self.assertNotEqual(response.json()["data"]["job_id"], str(stuck.pk))
+                with tenant_context(tenant.pk):
+                    stuck.refresh_from_db()
+                self.assertEqual(stuck.status, JobStatus.FAILED)
+                self.assertTrue(stuck.error)
+
+    def test_the_export_task_is_time_limited(self) -> None:
+        hard = settings.PLATFORM_EXPORT_TIME_LIMIT_SECONDS
+        self.assertEqual(export_tenant.time_limit, hard)
+        self.assertLess(export_tenant.soft_time_limit, hard)
+        self.assertGreater(export_tenant.soft_time_limit, 0)
 
     def test_an_export_in_flight_is_returned_not_repeated(self) -> None:
         tenant = make_tenant(status=S.ACTIVE)
@@ -272,3 +438,83 @@ class ExportTests(PlatformAPITestCase):
             job = BackgroundJob.objects.get(pk=job_id)
         self.assertEqual(job.status, JobStatus.FAILED)
         self.assertIn("storage down", job.error)
+
+
+LOCK_WAIT_SECONDS = 10
+LOCK_POLL_SECONDS = 0.05
+
+
+class ConcurrentExportTests(TransactionTestCase):
+    """Two `:export` calls at once: the school's row lock makes the second see the first's job."""
+
+    def setUp(self) -> None:
+        super().setUp()
+        self.tenant = make_tenant(status=S.ACTIVE)
+
+    def start(self) -> tuple[uuid.UUID, bool]:
+        job, created = export_services.start_export(
+            Tenant.objects.get(pk=self.tenant.pk), actor_id=uuid.uuid4()
+        )
+        return job.pk, created
+
+    def wait_until_blocked(self, contending: Future) -> None:
+        deadline = time.monotonic() + LOCK_WAIT_SECONDS
+        while time.monotonic() < deadline:
+            with connection.cursor() as cursor:
+                cursor.execute("SELECT count(*) FROM pg_locks WHERE NOT granted")
+                (waiting,) = cursor.fetchone()
+            if waiting:
+                return
+            self.assertFalse(contending.done(), "the second :export returned without waiting")
+            time.sleep(LOCK_POLL_SECONDS)
+        self.fail("the second :export never waited on the school's row lock")
+
+    def test_concurrent_exports_create_one_job(self) -> None:
+        def contender() -> tuple[uuid.UUID, bool]:
+            try:
+                with tenant_atomic(self.tenant.pk):
+                    return self.start()
+            finally:
+                connections.close_all()
+
+        with ThreadPoolExecutor(max_workers=1) as pool:
+            with tenant_atomic(self.tenant.pk):
+                first_id, first_created = self.start()
+                contending = pool.submit(contender)
+                self.wait_until_blocked(contending)
+            second_id, second_created = contending.result(timeout=LOCK_WAIT_SECONDS)
+
+        self.assertTrue(first_created)
+        self.assertFalse(second_created)
+        self.assertEqual(second_id, first_id)
+        with tenant_atomic(self.tenant.pk):
+            self.assertEqual(
+                BackgroundJob.objects.filter(job_type=TENANT_EXPORT_JOB_TYPE).count(), 1
+            )
+
+
+#: Name fragments that suggest a credential or a secret.
+SECRET_NAME_FRAGMENTS = ("secret", "token", "password", "cipher", "api_key")
+#: Columns whose names match a fragment but hold no secret, each with the reason.
+NOT_SECRET = {
+    # AI usage metering: counts of model tokens (core/ai/models.py).
+    "input_tokens",
+    "output_tokens",
+    "cache_creation_input_tokens",
+    "cache_read_input_tokens",
+}
+
+
+class ExportDeniedFieldsCoverageTests(SimpleTestCase):
+    def test_every_secret_looking_column_is_denied_or_allowed(self) -> None:
+        offenders = sorted(
+            f"{model._meta.label}.{field.name}"
+            for model in django_apps.get_models()
+            for field in model._meta.concrete_fields
+            if any(fragment in field.name for fragment in SECRET_NAME_FRAGMENTS)
+            and field.name not in EXPORT_DENIED_FIELDS
+            and field.attname not in EXPORT_DENIED_FIELDS
+            and field.name not in NOT_SECRET
+        )
+        # A new credential column must join EXPORT_DENIED_FIELDS (or NOT_SECRET, with a reason).
+        self.assertEqual(offenders, [])
