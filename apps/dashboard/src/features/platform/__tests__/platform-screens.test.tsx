@@ -145,21 +145,35 @@ describe("FlagsSection", () => {
 });
 
 describe("ReportsSection", () => {
-  it("renders the chosen report's sections and downloads it as CSV", async () => {
+  it("renders the chosen report's sections under translated headings, and downloads it as CSV", async () => {
     setUrl("/platform/reports?report=revenue");
+    // `reports/registry.py`'s `revenue()`: one `mrr` section, money as decimal strings.
     platform.fetchReport.mockResolvedValue({
       key: "revenue",
       title: "Revenue",
       generated_at: new Date().toISOString(),
-      sections: { mrr_by_plan: [{ plan_code: "standard", schools: 3, mrr: 45000 }] },
+      sections: {
+        mrr: [
+          {
+            plan_code: "standard",
+            currency: "PKR",
+            paying_tenants: 3,
+            past_due: 1,
+            mrr: "45000.00",
+            arr: "540000.00",
+          },
+        ],
+      },
     });
-    const blob = new Blob(["plan_code,schools"]);
+    const blob = new Blob(["plan_code,currency"]);
     platform.downloadReport.mockResolvedValue(blob);
     renderWithProviders(<ReportsSection />);
     const user = userEvent.setup();
 
-    expect(await screen.findByRole("table", { name: "Mrr by plan" })).toBeInTheDocument();
-    expect(screen.getByRole("cell", { name: "45,000" })).toBeInTheDocument();
+    const table = await screen.findByRole("table", { name: "Monthly recurring revenue" });
+    expect(within(table).getByRole("columnheader", { name: "Paying schools" })).toBeInTheDocument();
+    expect(within(table).getByRole("columnheader", { name: "Plan" })).toBeInTheDocument();
+    expect(within(table).getByRole("cell", { name: "45000.00" })).toBeInTheDocument();
     expect(platform.fetchReport).toHaveBeenCalledWith("revenue");
 
     await user.click(screen.getByRole("button", { name: "Download CSV" }));
@@ -167,5 +181,24 @@ describe("ReportsSection", () => {
     await waitFor(() => {
       expect(saveBlob).toHaveBeenCalledWith(blob, "revenue.csv");
     });
+  });
+});
+
+describe("ReportsSection, a status column", () => {
+  it("labels each status, and humanises a column the map doesn't know yet", async () => {
+    setUrl("/platform/reports");
+    platform.fetchReport.mockResolvedValue({
+      key: "tenant-overview",
+      title: "Tenant overview",
+      generated_at: new Date().toISOString(),
+      sections: { by_status: [{ status: "past_due", tenants: 2, brand_new_column: "x" }] },
+    });
+    renderWithProviders(<ReportsSection />);
+
+    const table = await screen.findByRole("table", { name: "Schools by status" });
+    expect(within(table).getByRole("cell", { name: "Past due" })).toBeInTheDocument();
+    expect(
+      within(table).getByRole("columnheader", { name: "Brand new column" }),
+    ).toBeInTheDocument();
   });
 });

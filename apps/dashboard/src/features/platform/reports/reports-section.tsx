@@ -30,7 +30,7 @@ import { useUrlParams } from "@/hooks/use-url-params";
 import { EMPTY_VALUE } from "@/lib/constants";
 import { enumLabel } from "@/lib/enum-label";
 import { resolveErrorMessage } from "@/lib/error-message";
-import { formatLastUpdated, humanizeSnakeCase, saveBlob } from "@/lib/helpers";
+import { formatLastUpdated, saveBlob } from "@/lib/helpers";
 import { queryKeys } from "@/lib/query-client";
 import { Services } from "@/services";
 import {
@@ -44,6 +44,62 @@ const REPORT_LABELS: Record<ReportKey, string> = {
   "tenant-overview": "reports.keys.tenantOverview",
   revenue: "reports.keys.revenue",
   usage: "reports.keys.usage",
+};
+
+/** The sections and columns `apps/api/apps/platform_admin/reports/registry.py` builds; a key
+ * the map doesn't know yet reads humanised (L32). */
+const SECTION_LABELS: Record<string, string> = {
+  by_status: "reports.sections.by_status",
+  signups: "reports.sections.signups",
+  churn: "reports.sections.churn",
+  mrr: "reports.sections.mrr",
+  distribution: "reports.sections.distribution",
+  quota_pressure: "reports.sections.quota_pressure",
+  adoption: "reports.sections.adoption",
+};
+
+const COLUMN_LABELS: Record<string, string> = Object.fromEntries(
+  [
+    "status",
+    "tenants",
+    "month",
+    "plan_code",
+    "currency",
+    "paying_tenants",
+    "past_due",
+    "mrr",
+    "arr",
+    "metric",
+    "min",
+    "median",
+    "p90",
+    "max",
+    "tenant_id",
+    "usage",
+    "limit",
+    "ratio",
+    "module",
+    "plan_tenants",
+  ].map((column) => [column, `reports.columns.${column}`]),
+);
+
+/** Columns whose values are themselves enum values with labels elsewhere in the namespace. */
+const VALUE_LABELS: Record<string, Record<string, string>> = {
+  status: {
+    provisioning: "status.provisioning",
+    trial: "status.trial",
+    active: "status.active",
+    past_due: "status.past_due",
+    suspended: "status.suspended",
+    deprovisioned: "status.deprovisioned",
+  },
+  metric: {
+    students: "usage.metrics.students",
+    staff: "usage.metrics.staff",
+    storage_gb: "usage.metrics.storage_gb",
+    sms_credits: "usage.metrics.sms_credits",
+    ai_tokens: "usage.metrics.ai_tokens",
+  },
 };
 
 function isReportKey(value: string | null): value is ReportKey {
@@ -76,6 +132,13 @@ export function ReportsSection() {
   const { searchParams, setParams } = useUrlParams();
   const requested = searchParams.get("report");
   const key: ReportKey = isReportKey(requested) ? requested : "tenant-overview";
+
+  const cell = (column: string, value: unknown): string => {
+    const labels = VALUE_LABELS[column];
+    return labels && typeof value === "string"
+      ? enumLabel(t, labels, value)
+      : cellText(value, locale);
+  };
 
   const query = useQuery({
     queryKey: queryKeys.detail(PLATFORM_QUERY_MODULE, REPORT_RESOURCE, key),
@@ -143,7 +206,7 @@ export function ReportsSection() {
           </p>
           {Object.entries(query.data.sections).map(([name, rows]) => {
             const columns = rows[0] ? Object.keys(rows[0]) : [];
-            const title = humanizeSnakeCase(name);
+            const title = enumLabel(t, SECTION_LABELS, name);
             return (
               <Card key={name}>
                 <CardHeader>
@@ -158,7 +221,9 @@ export function ReportsSection() {
                       <TableHeader>
                         <TableRow>
                           {columns.map((column) => (
-                            <TableHead key={column}>{humanizeSnakeCase(column)}</TableHead>
+                            <TableHead key={column}>
+                              {enumLabel(t, COLUMN_LABELS, column)}
+                            </TableHead>
                           ))}
                         </TableRow>
                       </TableHeader>
@@ -166,7 +231,7 @@ export function ReportsSection() {
                         {rows.map((row) => (
                           <TableRow key={rowKey(row)}>
                             {columns.map((column) => (
-                              <TableCell key={column}>{cellText(row[column], locale)}</TableCell>
+                              <TableCell key={column}>{cell(column, row[column])}</TableCell>
                             ))}
                           </TableRow>
                         ))}

@@ -5499,6 +5499,37 @@
         "tenantOverview": "Tenant overview",
         "revenue": "Revenue",
         "usage": "Usage and adoption"
+      },
+      "sections": {
+        "by_status": "Schools by status",
+        "signups": "Sign-ups by month",
+        "churn": "Churn by month",
+        "mrr": "Monthly recurring revenue",
+        "distribution": "Usage distribution",
+        "quota_pressure": "Schools near their limits",
+        "adoption": "Module adoption"
+      },
+      "columns": {
+        "status": "Status",
+        "tenants": "Schools",
+        "month": "Month",
+        "plan_code": "Plan",
+        "currency": "Currency",
+        "paying_tenants": "Paying schools",
+        "past_due": "Past due",
+        "mrr": "MRR",
+        "arr": "ARR",
+        "metric": "Metric",
+        "min": "Lowest",
+        "median": "Median",
+        "p90": "90th percentile",
+        "max": "Highest",
+        "tenant_id": "School",
+        "usage": "In use",
+        "limit": "Limit",
+        "ratio": "Share of limit",
+        "module": "Module",
+        "plan_tenants": "Schools on the plan"
       }
     }
   }

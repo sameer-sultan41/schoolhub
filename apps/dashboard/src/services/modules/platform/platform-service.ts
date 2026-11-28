@@ -7,6 +7,7 @@ import type {
   ChangePlanInput,
   DeleteTenantInput,
   ExportAccepted,
+  ExportDownload,
   FeatureFlagRecord,
   FeatureFlagUpdateInput,
   FeatureOverrideInput,
@@ -100,16 +101,31 @@ export function restoreTenant(id: string, input: ReasonInput, options: ActionOpt
 
 /** Starts (or rejoins) the school's export job; `202 {job_id, status}`. */
 export async function exportTenant(id: string, options: ActionOptions): Promise<ExportAccepted> {
-  const { data } = await apiClient.post<{ job_id: string }>(
+  const { data } = await apiClient.post<ExportAccepted>(
     endpoints.platform.tenantAction(id, "export"),
     undefined,
     { idempotencyKey: options.idempotencyKey },
   );
-  return { jobId: data.job_id };
+  return data;
 }
 
+/** Polls one of the school's platform jobs. The answer carries no link. */
 export async function fetchTenantJob(tenantId: string, jobId: string): Promise<PlatformJob> {
   const { data } = await apiClient.get<PlatformJob>(endpoints.platform.tenantJob(tenantId, jobId));
+  return data;
+}
+
+/**
+ * A fresh signed link to a succeeded export, audited per call on the server. 409 `conflict`
+ * until the job has succeeded.
+ */
+export async function downloadTenantExport(
+  tenantId: string,
+  jobId: string,
+): Promise<ExportDownload> {
+  const { data } = await apiClient.post<ExportDownload>(
+    endpoints.platform.tenantJobDownload(tenantId, jobId),
+  );
   return data;
 }
 

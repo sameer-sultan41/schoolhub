@@ -18,6 +18,7 @@ export function platformServicesMock() {
       "restoreTenant",
       "exportTenant",
       "fetchTenantJob",
+      "downloadTenantExport",
       "fetchTenantUsage",
       "refreshTenantUsage",
       "fetchSubscription",
