@@ -49,8 +49,12 @@ class TaskDefinitionTests(unittest.TestCase):
         self.assertTrue(check(td))
 
     def test_cluster_of_the_other_environment_fails(self) -> None:
-        td = task_definition(env="staging")
-        self.assertTrue(ctd.problems(td, "schoolhub-staging", "api", "production", ACCOUNT, REGISTRY))
+        # Production roles and a family that matches the given cluster: only the
+        # cluster rule can fire.
+        td = task_definition(env="production", family="schoolhub-staging-api")
+        found = ctd.problems(td, "schoolhub-staging", "api", "production", ACCOUNT, REGISTRY)
+        self.assertEqual(len(found), 1)
+        self.assertIn("is not schoolhub-production", found[0])
 
 
 if __name__ == "__main__":

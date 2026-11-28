@@ -296,8 +296,9 @@ jobs:
           set -e
           echo "exitcode=$code" >> "$GITHUB_OUTPUT"
           if [ "$code" -ne 0 ] && [ "$code" -ne 2 ]; then
+            # Only the Error: lines: the detail lines after them can echo tfvars values.
             echo "::error::terraform plan failed; its Error: lines follow"
-            grep -A3 '^Error:' "$RUNNER_TEMP/plan.log" || true
+            grep '^Error:' "$RUNNER_TEMP/plan.log" || true
             exit 1
           fi
 

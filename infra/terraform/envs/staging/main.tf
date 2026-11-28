@@ -2,9 +2,9 @@
 # Staging — a scaled-down copy of the production topology.
 #
 # "Scaled-down" means fewer and smaller instances. It does NOT mean structurally
-# different: same subnet tiers, same security-group graph, same PgBouncer in
-# transaction mode, same non-BYPASSRLS application role. A staging environment
-# that differs in shape rehearses nothing.
+# different: same subnet tiers, same security-group graph, same direct RDS
+# connections (no pooler in v1, ADR-0040), same non-BYPASSRLS application role.
+# A staging environment that differs in shape rehearses nothing.
 #
 # Data here is anonymized synthetic tenants. Production PII must never be
 # restored into this account (hosting-deployment.md §2).
