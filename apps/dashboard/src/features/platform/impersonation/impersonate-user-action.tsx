@@ -10,7 +10,7 @@ import { hasPermission } from "@/lib/permissions";
 import { Services } from "@/services";
 import { OPERATIONAL_STATUSES } from "@/services/modules/platform/platform-constant";
 import { PLATFORM_KEYS } from "@/features/platform/platform-permissions";
-import { tenantDetailKey } from "@/features/platform/tenants/tenant-detail";
+import { tenantDetailKey } from "@/features/platform/shared/platform-query-keys";
 import { ImpersonateUserDialog } from "./impersonate-user-dialog";
 
 /**
