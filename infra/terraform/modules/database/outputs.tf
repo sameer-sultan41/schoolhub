@@ -14,7 +14,7 @@ output "endpoint" {
 }
 
 output "address" {
-  description = "Hostname only. This is what PgBouncer's [databases] section points at."
+  description = "Hostname only: the host in the app and migrator DATABASE_URLs (direct to RDS in v1, ADR-0040) and the db-bootstrap task's PGHOST."
   value       = aws_db_instance.this.address
 }
 
