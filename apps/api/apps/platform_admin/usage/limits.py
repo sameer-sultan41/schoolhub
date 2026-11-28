@@ -81,17 +81,18 @@ def breaches(before: Limits, after: Limits, snapshots: Iterable[TenantUsageSnaps
         return []
     # Each entry names its school, so a client lists them without a request per school. One
     # query for every school: `tenants` is a platform table, readable with no school bound.
-    names = {
-        row["pk"]: row
-        for row in Tenant.objects.filter(pk__in={tenant_id for tenant_id, *_ in over}).values(
-            "pk", "name", "slug"
-        )
+    names: dict[uuid.UUID, tuple[str, str]] = {
+        pk: (name, slug)
+        for pk, name, slug in Tenant.objects.filter(
+            pk__in={tenant_id for tenant_id, *_ in over}
+        ).values_list("pk", "name", "slug")
     }
+    unnamed = ("", "")
     return [
         {
             "tenant_id": str(tenant_id),
-            "tenant_name": names.get(tenant_id, {}).get("name", ""),
-            "slug": names.get(tenant_id, {}).get("slug", ""),
+            "tenant_name": names.get(tenant_id, unnamed)[0],
+            "slug": names.get(tenant_id, unnamed)[1],
             "metric": metric,
             "limit": limit,
             "usage": _json_number(usage),
