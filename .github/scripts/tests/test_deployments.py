@@ -16,10 +16,21 @@ import deployments as dp  # its directory is put on sys.path just above
 A, B, C = "a" * 40, "b" * 40, "c" * 40
 
 
-def dep(i: int, sha: str, task: str = "deploy", record_sha: str | None = None, **payload: object) -> dict:
+def dep(i: int, sha: str, task: str = "deploy", record_sha: str | None = None,
+        creator: str = dp.BOT_LOGIN, **payload: object) -> dict:
     return {
         "id": i, "task": task, "sha": record_sha or sha, "created_at": f"2026-11-{10 + i:02d}T00:00:00Z",
-        "payload": {"target_sha": sha, **payload}, "creator": {"login": "u"},
+        "payload": {"target_sha": sha, "run_id": str(900 + i), **payload}, "creator": {"login": creator},
+    }
+
+
+def deploy_run(i: int, path: str = ".github/workflows/deploy.yml", branch: str = "main",
+               event: str = "push") -> dict:
+    """The deploy.yml run that created dep(i): live across the record's created_at."""
+    day = 10 + i
+    return {
+        "id": 900 + i, "path": path, "head_branch": branch, "event": event,
+        "created_at": f"2026-11-{day:02d}T00:00:00Z", "updated_at": f"2026-11-{day:02d}T01:00:00Z",
     }
 
 
@@ -45,6 +56,21 @@ class PureCoreTests(unittest.TestCase):
         statuses = {1: st("in_progress", "success", "inactive")}
         self.assertIsNone(dp.pick_current(deps, statuses))
         self.assertTrue(dp.ever_succeeded(statuses[1]))
+
+    def test_record_from_another_creator_is_ignored(self) -> None:
+        self.assertIsNone(dp.pick_current([dep(1, A, creator="mallory")], {1: st("success")}))
+
+    def test_run_from_another_workflow_does_not_match(self) -> None:
+        self.assertFalse(dp.run_matches(dep(1, A), deploy_run(1, path=".github/workflows/evil.yml")))
+
+    def test_run_from_another_branch_does_not_match(self) -> None:
+        self.assertFalse(dp.run_matches(dep(1, A), deploy_run(1, branch="feature")))
+
+    def test_record_created_outside_the_run_does_not_match(self) -> None:
+        self.assertFalse(dp.run_matches(dep(1, A), deploy_run(2)))
+
+    def test_deploy_run_on_main_matches(self) -> None:
+        self.assertTrue(dp.run_matches(dep(1, A), deploy_run(1, event="workflow_dispatch")))
 
     def test_other_task_is_ignored(self) -> None:
         self.assertIsNone(dp.pick_current([dep(1, A, task="deploy:other")], {1: st("success")}))
@@ -133,9 +159,32 @@ class CreateTests(unittest.TestCase):
 
     def test_current_reads_through_the_api(self) -> None:
         listing = dp.ApiResult(0, json.dumps(dep(1, A)) + "\n" + json.dumps(dep(2, B, task="other")), "")
-        api = FakeApi([listing, dp.ApiResult(0, json.dumps(st("success")[0]), "")])
+        api = FakeApi([
+            listing,
+            dp.ApiResult(0, json.dumps(deploy_run(1)), ""),
+            dp.ApiResult(0, json.dumps(st("success")[0]), ""),
+        ])
         code, out = run_main(["deployments.py", "--repo", "o/r", "current", "--env", "staging"], api)
         self.assertEqual((code, out.strip()), (0, A))
+
+    def test_forged_record_pointing_at_a_branch_run_is_not_current(self) -> None:
+        listing = dp.ApiResult(0, json.dumps(dep(1, A)) + "\n" + json.dumps(dep(2, B)), "")
+        api = FakeApi([
+            listing,
+            dp.ApiResult(0, json.dumps(deploy_run(1)), ""),
+            dp.ApiResult(0, json.dumps(deploy_run(2, branch="feature")), ""),
+            dp.ApiResult(0, json.dumps(st("success")[0]), ""),
+        ])
+        code, out = run_main(["deployments.py", "--repo", "o/r", "current", "--env", "staging"], api)
+        self.assertEqual((code, out.strip()), (0, A))
+
+    def test_each_run_is_fetched_once(self) -> None:
+        listing = dp.ApiResult(0, json.dumps(dep(1, A)) + "\n" + json.dumps(dep(2, B, run_id="901")), "")
+        run = dp.ApiResult(0, json.dumps(deploy_run(1) | {"updated_at": "2026-11-13T00:00:00Z"}), "")
+        ok = dp.ApiResult(0, json.dumps(st("success")[0]), "")
+        api = FakeApi([listing, run, ok, ok])
+        run_main(["deployments.py", "--repo", "o/r", "current", "--env", "staging"], api)
+        self.assertEqual(sum(1 for args, _ in api.calls if "actions/runs/901" in args[-1]), 1)
 
 
 if __name__ == "__main__":

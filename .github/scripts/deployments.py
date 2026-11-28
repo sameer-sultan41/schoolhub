@@ -31,6 +31,10 @@ from collections.abc import Callable
 from dataclasses import dataclass
 
 TASK = "deploy"
+# Records are trusted only when GitHub Actions made them, from a deploy.yml run on main.
+BOT_LOGIN = "github-actions[bot]"
+DEPLOY_WORKFLOW_PATH = ".github/workflows/deploy.yml"
+DEPLOY_RUN_EVENTS = {"push", "workflow_dispatch"}
 BRANCH_POLICY_MARKERS = ("protection rules", "not allowed to deploy")
 
 
@@ -95,9 +99,32 @@ def _order(item: dict) -> tuple[str, int]:
 
 
 def ours(deployments: list[dict]) -> list[dict]:
-    """Only records this pipeline made: task=deploy with a target SHA, oldest first."""
+    """Records shaped like this pipeline's: task=deploy, a target SHA, created by the
+    Actions bot; oldest first. `run_matches` then ties each one to a deploy.yml run."""
     return sorted(
-        (d for d in deployments if d.get("task") == TASK and target_sha(d)), key=_order
+        (
+            d
+            for d in deployments
+            if d.get("task") == TASK
+            and target_sha(d)
+            and (d.get("creator") or {}).get("login") == BOT_LOGIN
+        ),
+        key=_order,
+    )
+
+
+def run_matches(deployment: dict, run: dict | None) -> bool:
+    """True when payload.run_id names a deploy.yml run on main that was live when the
+    record was created. Any workflow with `deployments: write` can create a record as the
+    bot, so the creator alone proves nothing."""
+    if not run:
+        return False
+    created = deployment.get("created_at") or ""
+    return (
+        (run.get("path") or "").split("@")[0] == DEPLOY_WORKFLOW_PATH
+        and run.get("head_branch") == "main"
+        and run.get("event") in DEPLOY_RUN_EVENTS
+        and (run.get("created_at") or "") <= created <= (run.get("updated_at") or "")
     )
 
 
@@ -143,6 +170,21 @@ class Deployments:
     def __init__(self, repo: str, api: Api = gh_api) -> None:
         self.repo = repo
         self.api = api
+        self._runs: dict[str, dict | None] = {}
+
+    def run(self, run_id: str) -> dict | None:
+        """The workflow run, fetched once per id; None when it does not exist."""
+        if not run_id.isdigit():
+            return None
+        if run_id not in self._runs:
+            result = self.api([f"repos/{self.repo}/actions/runs/{run_id}"], None)
+            if result.code == 0:
+                self._runs[run_id] = json.loads(result.stdout)
+            elif "404" in f"{result.stdout}{result.stderr}":
+                self._runs[run_id] = None
+            else:
+                raise ApiError(result.stderr.strip() or result.stdout.strip())
+        return self._runs[run_id]
 
     def list(self, env: str) -> list[dict]:
         return _lines(self.api(
@@ -159,7 +201,9 @@ class Deployments:
         ))
 
     def load(self, env: str) -> tuple[list[dict], dict[int, list[dict]]]:
-        deployments = ours(self.list(env))
+        deployments = [
+            d for d in ours(self.list(env)) if run_matches(d, self.run(str(_payload(d).get("run_id", ""))))
+        ]
         return deployments, {d["id"]: self.statuses(d["id"]) for d in deployments}
 
     def create(self, env: str, sha: str, mode: str, payload: dict) -> int:
