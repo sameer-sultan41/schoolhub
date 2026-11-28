@@ -300,6 +300,15 @@ resource "aws_vpc_security_group_ingress_rule" "database_from_bastion" {
   ip_protocol                  = "tcp"
 }
 
+resource "aws_vpc_security_group_ingress_rule" "database_from_migrate" {
+  security_group_id            = aws_security_group.database.id
+  description                  = "PostgreSQL from the one-off migrate and db-bootstrap tasks"
+  referenced_security_group_id = aws_security_group.migrate.id
+  from_port                    = 5432
+  to_port                      = 5432
+  ip_protocol                  = "tcp"
+}
+
 # No egress rule for the database SG: with none defined, all egress is denied.
 # RDS does not need to originate connections.
 
@@ -318,6 +327,37 @@ resource "aws_vpc_security_group_ingress_rule" "cache_from_app" {
   from_port                    = 6379
   to_port                      = 6379
   ip_protocol                  = "tcp"
+}
+
+# One-off tasks run with this group (passed at run-task), not the app group:
+# they talk only to PostgreSQL and to AWS APIs.
+resource "aws_security_group" "migrate" {
+  name        = "${var.name_prefix}-migrate"
+  description = "One-off migrate and db-bootstrap tasks: direct PostgreSQL, HTTPS out"
+  vpc_id      = aws_vpc.this.id
+
+  tags = merge(local.tags, { Name = "${var.name_prefix}-migrate" })
+}
+
+resource "aws_vpc_security_group_egress_rule" "migrate_to_database" {
+  security_group_id            = aws_security_group.migrate.id
+  description                  = "PostgreSQL, directly to RDS"
+  referenced_security_group_id = aws_security_group.database.id
+  from_port                    = 5432
+  to_port                      = 5432
+  ip_protocol                  = "tcp"
+}
+
+# ECR, Secrets Manager and CloudWatch Logs through the NAT gateway; no VPC
+# interface endpoints exist for them here, so the destination is any address.
+#trivy:ignore:AVD-AWS-0104
+resource "aws_vpc_security_group_egress_rule" "migrate_https" {
+  security_group_id = aws_security_group.migrate.id
+  description       = "HTTPS to AWS APIs (ECR, Secrets Manager, CloudWatch Logs)"
+  cidr_ipv4         = "0.0.0.0/0"
+  from_port         = 443
+  to_port           = 443
+  ip_protocol       = "tcp"
 }
 
 resource "aws_security_group" "bastion" {

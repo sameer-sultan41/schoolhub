@@ -17,11 +17,13 @@ on:
   pull_request:
     paths:
       - "infra/terraform/**"
+      - "infra/postgres/init/**"
       - ".github/workflows/infra-terraform.yml"
   push:
     branches: [main]
     paths:
       - "infra/terraform/**"
+      - "infra/postgres/init/**"
   workflow_dispatch:
 
 permissions:
@@ -68,6 +70,7 @@ jobs:
           - infra/terraform/modules/cache
           - infra/terraform/modules/storage
           - infra/terraform/modules/ecs-service
+          - infra/terraform/modules/gha-deploy-policy
           # infra/terraform/modules/cdn is intentionally absent: it declares
           # configuration_aliases for the us-east-1 provider that CloudFront
           # certificates require, and an aliased provider can only be supplied by a
@@ -94,11 +97,46 @@ jobs:
         working-directory: ${{ matrix.dir }}
         run: terraform validate
 
-      # Mocked provider, so no AWS credentials. Roots and modules with a tests/ dir.
+  # terraform test with mocked providers: no AWS credentials, nothing applied.
+  # A separate job so modules/cdn (which cannot validate standalone) is tested too.
+  test:
+    name: test (${{ matrix.dir }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        dir:
+          - infra/terraform/bootstrap
+          - infra/terraform/modules/ecs-service
+          - infra/terraform/modules/gha-deploy-policy
+          - infra/terraform/modules/cdn
+          - infra/terraform/envs/staging
+          - infra/terraform/envs/production
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+          terraform_wrapper: false
+
+      - name: terraform init
+        working-directory: ${{ matrix.dir }}
+        run: terraform init -backend=false -input=false
+
       - name: terraform test
-        if: contains(fromJSON('["infra/terraform/bootstrap"]'), matrix.dir)
         working-directory: ${{ matrix.dir }}
         run: terraform test
+
+      # The ALB certificate reuses module.cdn's and the tenants' validation
+      # records; an env root that creates its own would duplicate them.
+      - name: env roots declare no Route 53 records
+        if: startsWith(matrix.dir, 'infra/terraform/envs/')
+        run: |
+          if grep -l 'resource "aws_route53_record"' infra/terraform/envs/*/*.tf; then
+            echo "::error::An env root declares aws_route53_record; validation records belong to modules/cdn or the tenant."
+            exit 1
+          fi
 
   lint:
     name: tflint

@@ -62,3 +62,8 @@ output "s3_vpc_endpoint_id" {
   description = "Gateway endpoint keeping S3 traffic off the NAT gateway."
   value       = aws_vpc_endpoint.s3.id
 }
+
+output "migrate_security_group_id" {
+  description = "Security group for the one-off migrate and db-bootstrap tasks (MIGRATE_SECURITY_GROUP)."
+  value       = aws_security_group.migrate.id
+}

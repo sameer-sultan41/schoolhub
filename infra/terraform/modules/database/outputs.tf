@@ -57,3 +57,8 @@ output "backup_retention_days" {
   description = "Effective PITR window in days."
   value       = aws_db_instance.this.backup_retention_period
 }
+
+output "connections_alarm_threshold" {
+  description = "DatabaseConnections alarm threshold, for the deploy runbook's max_connections check."
+  value       = aws_cloudwatch_metric_alarm.connections.threshold
+}

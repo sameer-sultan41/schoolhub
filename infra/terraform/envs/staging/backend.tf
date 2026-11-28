@@ -1,32 +1,27 @@
 # =============================================================================
-# Remote state for the staging environment.
+# Remote state for staging: the shared bootstrap bucket, key
+# schoolhub/staging/terraform.tfstate (D4, D6 in the deploy pipeline plan).
 #
-# The bucket is created by hand once, BEFORE the first init — Terraform cannot
-# store its state in a bucket it has not created yet. See terraform/README.md
-# "Before the first apply".
+# A backend block cannot read variables, and the bucket name carries the account
+# ID, so bucket, region, key and KMS key are passed at init (D19):
 #
-# Requirements on that bucket, all of which matter:
-#   * Versioning ON      — the only way back from a truncated or bad state push.
-#   * SSE-KMS            — state contains generated passwords in plaintext.
-#   * Public access blocked at the account level.
-#   * A bucket policy denying s3:DeleteObjectVersion to everyone but the
-#     break-glass role, so a compromised CI role cannot erase state history.
+#   terraform init \
+#     -backend-config="bucket=$TF_STATE_BUCKET" \
+#     -backend-config="region=$AWS_REGION" \
+#     -backend-config="key=schoolhub/staging/terraform.tfstate" \
+#     -backend-config="kms_key_id=$TF_STATE_KMS_KEY_ARN"
 #
-# State locking uses the S3-native lock file (use_lockfile), not DynamoDB. This
-# requires Terraform >= 1.10, which is why required_version below is tighter
-# than the >= 1.9 the modules declare.
+# The bucket (versioned, SSE-KMS, history-erasure deny) is created by
+# infra/terraform/bootstrap. Locking is the S3 lock file (use_lockfile), no
+# DynamoDB table; S3 native locking is GA from Terraform 1.11.
 # =============================================================================
 
 terraform {
-  required_version = ">= 1.10"
+  required_version = ">= 1.11"
 
   backend "s3" {
-    bucket = "schoolhub-tfstate-staging"
-    key    = "staging/terraform.tfstate"
-    region = "us-east-1"
-
     encrypt      = true
-    kms_key_id   = "alias/schoolhub-tfstate"
     use_lockfile = true
+    # bucket, region, key and kms_key_id come from -backend-config (D6, D19)
   }
 }

@@ -319,13 +319,13 @@ resource "aws_cloudwatch_metric_alarm" "storage" {
 
 resource "aws_cloudwatch_metric_alarm" "connections" {
   alarm_name          = "${var.name_prefix}-rds-connections-high"
-  alarm_description   = "Connection count high. With PgBouncer in front this should be flat — a spike means something is connecting around the pooler."
+  alarm_description   = "Connections near max_connections. v1 connects directly (no pooler, ADR-0040); a sustained breach means it is time for the deferred pooler."
   namespace           = "AWS/RDS"
   metric_name         = "DatabaseConnections"
   statistic           = "Maximum"
   period              = 300
   evaluation_periods  = 2
-  threshold           = 160
+  threshold           = var.connections_alarm_threshold
   comparison_operator = "GreaterThanThreshold"
   treat_missing_data  = "notBreaching"
 

@@ -60,7 +60,8 @@ terraform/
 │   ├── cache/         ElastiCache Redis 8, TLS + AUTH, no backups by design
 │   ├── storage/       S3 uploads + backups, versioning, lifecycle, Object Lock
 │   ├── ecs-service/   One Fargate service: task def, roles, target group, scaling
-│   └── cdn/           CloudFront, wildcard ACM cert, Route 53, WAF
+│   ├── cdn/           CloudFront, wildcard ACM cert, Route 53, WAF
+│   └── gha-deploy-policy/  The env-scoped half of the CI deploy role
 ├── bootstrap/         State bucket, GitHub OIDC, CI roles, ECR (applied once, local state)
 └── envs/
     ├── staging/       Scaled-down copy of the production topology
@@ -73,9 +74,9 @@ file per environment instead of hidden three levels down.
 
 ## Conventions
 
-- **Provider `~> 6.0`, Terraform `>= 1.9`** in modules; environments require
-  `>= 1.10` because their backends use native S3 state locking (`use_lockfile`),
-  which does not exist before 1.10.
+- **Provider `~> 6.0`, Terraform `>= 1.9`** in modules; environments and
+  `bootstrap/` require `>= 1.11`, where native S3 state locking (`use_lockfile`)
+  is GA.
 - **Every variable has a description and, where a wrong value is dangerous, a
   `validation` block.** `engine_version` refusing anything but PostgreSQL 18 and
   `master_username` refusing `schoolhub_app` are the load-bearing ones.

@@ -20,7 +20,7 @@
 # =============================================================================
 
 terraform {
-  required_version = ">= 1.10"
+  required_version = ">= 1.11"
 
   required_providers {
     aws = {
@@ -67,6 +67,13 @@ locals {
   # the storage module: it breaks the storage <-> cdn dependency cycle.
   uploads_bucket_regional_domain_name = "${var.uploads_bucket_name}.s3.${var.aws_region}.amazonaws.com"
 
+  # One image per service per commit, from the shared ECR repositories (bootstrap,
+  # D5). CI registers new revisions; image_tag is only the bootstrap revision.
+  images = { for r in ["api", "dashboard", "website"] : r => "${var.ecr_registry}/schoolhub/${r}:${var.image_tag}" }
+
+  # Created by infra/terraform/bootstrap; this root attaches the env-scoped half.
+  gha_deploy_role_name = "schoolhub-gha-deploy-${local.environment}"
+
   api_environment = {
     # Every environment runs prod.py; they differ only by the values below.
     DJANGO_SETTINGS_MODULE = "config.settings.prod"
@@ -82,6 +89,12 @@ locals {
     S3_REGION_NAME         = var.aws_region
     LOG_LEVEL              = "INFO"
     ENVIRONMENT            = local.environment
+    # prod.py builds the TLS Redis URLs from these and the REDIS_AUTH_TOKEN secret.
+    REDIS_HOST = module.cache.primary_endpoint_address
+    REDIS_PORT = tostring(module.cache.port)
+    # The dashboard calls the API cross-origin with credentials.
+    CORS_ALLOWED_ORIGINS = "https://app.${var.platform_domain}"
+    CSRF_TRUSTED_ORIGINS = "https://app.${var.platform_domain},https://api.${var.platform_domain}"
   }
 
   api_secrets = merge(
@@ -160,6 +173,10 @@ module "database" {
   performance_insights_retention_days = 465
   monitoring_interval_seconds         = 30
   log_retention_days                  = 90
+
+  # About 80% of max_connections for this instance class; confirm with
+  # SHOW max_connections after the first apply (ADR-0040: no pooler in v1).
+  connections_alarm_threshold = 720
 
   alarm_sns_topic_arns = var.alarm_sns_topic_arns
   tags                 = local.common_tags
@@ -252,6 +269,34 @@ resource "aws_lb" "this" {
   tags = local.common_tags
 }
 
+# The ALB needs a certificate in its own region (CloudFront's is in us-east-1).
+# Same names as the CDN certificate: CloudFront forwards the viewer Host, so the
+# ALB is reached with that name as SNI (a tenant custom domain included).
+resource "aws_acm_certificate" "alb" {
+  domain_name               = var.platform_domain
+  subject_alternative_names = concat(["*.${var.platform_domain}"], var.custom_domain_aliases)
+  validation_method         = "DNS"
+
+  lifecycle {
+    create_before_destroy = true
+  }
+
+  tags = local.common_tags
+}
+
+# ACM uses the same validation CNAME for a name in every region of one account,
+# so module.cdn's records (platform zone) and the tenants' own records already
+# validate this certificate. Every record name is listed: the provider errors on
+# any it is not given.
+resource "aws_acm_certificate_validation" "alb" {
+  certificate_arn = aws_acm_certificate.alb.arn
+  validation_record_fqdns = distinct([
+    for dvo in aws_acm_certificate.alb.domain_validation_options : trimsuffix(dvo.resource_record_name, ".")
+  ])
+
+  depends_on = [module.cdn]
+}
+
 # CloudFront redirects viewers to HTTPS and reaches the origin over HTTPS only, so there
 # is no port-80 listener.
 resource "aws_lb_listener" "https" {
@@ -259,7 +304,7 @@ resource "aws_lb_listener" "https" {
   port              = 443
   protocol          = "HTTPS"
   ssl_policy        = "ELBSecurityPolicy-TLS13-1-2-2021-06"
-  certificate_arn   = module.cdn.certificate_arn
+  certificate_arn   = aws_acm_certificate_validation.alb.certificate_arn
 
   default_action {
     type = "fixed-response"
@@ -286,7 +331,7 @@ module "api" {
   security_group_ids = [module.network.app_security_group_id]
   vpc_id             = module.network.vpc_id
 
-  image          = var.api_image
+  image          = local.images.api
   cpu            = 1024
   memory         = 2048
   container_port = 8000
@@ -299,6 +344,7 @@ module "api" {
 
   environment_variables = local.api_environment
   secret_arns           = local.api_secrets
+  secret_kms_key_arns   = [module.cache.kms_key_arn]
   task_role_policy_arns = [module.storage.app_access_policy_arn]
 
   desired_count = 3
@@ -322,7 +368,7 @@ module "celery_worker" {
   security_group_ids = [module.network.app_security_group_id]
   vpc_id             = module.network.vpc_id
 
-  image = var.api_image
+  image = local.images.api
 
   # Lane order is priority order. The emergency lane must not sit behind a bulk
   # fee-reminder run — see the notifications spec.
@@ -335,6 +381,7 @@ module "celery_worker" {
 
   environment_variables = local.api_environment
   secret_arns           = local.api_secrets
+  secret_kms_key_arns   = [module.cache.kms_key_arn]
   task_role_policy_arns = [module.storage.app_access_policy_arn]
 
   desired_count = 3
@@ -358,7 +405,7 @@ module "celery_beat" {
   security_group_ids = [module.network.app_security_group_id]
   vpc_id             = module.network.vpc_id
 
-  image   = var.api_image
+  image   = local.images.api
   command = ["celery", "-A", "config.celery", "beat", "-l", "info"]
   cpu     = 512
   memory  = 1024
@@ -367,6 +414,7 @@ module "celery_beat" {
 
   environment_variables = local.api_environment
   secret_arns           = local.api_secrets
+  secret_kms_key_arns   = [module.cache.kms_key_arn]
 
   # ONE. Not "one for now" — one, permanently. A second scheduler fires every
   # retention job, every fee reminder and every digest twice, against live
@@ -391,7 +439,7 @@ module "dashboard" {
   security_group_ids = [module.network.app_security_group_id]
   vpc_id             = module.network.vpc_id
 
-  image          = var.dashboard_image
+  image          = local.images.dashboard
   cpu            = 1024
   memory         = 2048
   container_port = 3000
@@ -439,7 +487,7 @@ module "website" {
   security_group_ids = [module.network.app_security_group_id]
   vpc_id             = module.network.vpc_id
 
-  image          = var.website_image
+  image          = local.images.website
   cpu            = 1024
   memory         = 2048
   container_port = 3001 # the Dockerfile's PORT
@@ -481,6 +529,116 @@ module "website" {
   log_retention_days = 90
 
   tags = local.common_tags
+}
+
+# -----------------------------------------------------------------------------
+# One-off tasks: no service, run with MIGRATE_SECURITY_GROUP at run-task
+# -----------------------------------------------------------------------------
+# The deploy runs this before any service rolls. DATABASE_URL is the migrator
+# role, directly on 5432 (it owns the tables); the other settings secrets are
+# needed for settings import.
+module "migrate" {
+  source = "../../modules/ecs-service"
+
+  name_prefix    = local.name_prefix
+  environment    = local.environment
+  service_name   = "migrate"
+  create_service = false
+
+  cluster_arn        = aws_ecs_cluster.this.arn
+  subnet_ids         = module.network.private_subnet_ids
+  security_group_ids = [module.network.migrate_security_group_id]
+
+  image   = local.images.api
+  command = ["python", "manage.py", "migrate", "--noinput"]
+  cpu     = 512
+  memory  = 1024
+
+  expose_via_alb     = false
+  enable_autoscaling = false
+
+  environment_variables = local.api_environment
+  secret_arns           = merge(local.api_secrets, { DATABASE_URL = var.migrator_database_url_arn })
+  secret_kms_key_arns   = [module.cache.kms_key_arn]
+
+  tags = local.common_tags
+}
+
+# Creates the three database roles from the same SQL compose runs. Run by a
+# human with admin credentials (deploy.md), never by CI: its roles are not in
+# the deploy policy's PassRole list.
+module "db_bootstrap" {
+  source = "../../modules/ecs-service"
+
+  name_prefix    = local.name_prefix
+  environment    = local.environment
+  service_name   = "db-bootstrap"
+  create_service = false
+
+  cluster_arn        = aws_ecs_cluster.this.arn
+  subnet_ids         = module.network.private_subnet_ids
+  security_group_ids = [module.network.migrate_security_group_id]
+
+  image   = var.postgres_client_image
+  command = ["sh", "-ec", "printf '%s' \"$EXTENSIONS_SQL\" > /tmp/01.sql; printf '%s' \"$ROLES_SQL\" > /tmp/02.sql; psql -v ON_ERROR_STOP=1 -f /tmp/01.sql; psql -v ON_ERROR_STOP=1 -f /tmp/02.sql"]
+  cpu     = 256
+  memory  = 512
+
+  expose_via_alb     = false
+  enable_autoscaling = false
+
+  environment_variables = {
+    PGHOST         = module.database.address
+    PGPORT         = "5432"
+    PGDATABASE     = module.database.database_name
+    PGSSLMODE      = "require"
+    EXTENSIONS_SQL = file("${path.module}/../../../postgres/init/01-extensions.sql")
+    ROLES_SQL      = file("${path.module}/../../../postgres/init/02-app-role.sql")
+  }
+
+  secret_arns = {
+    PGUSER                = "${module.database.master_secret_arn}:username::"
+    PGPASSWORD            = "${module.database.master_secret_arn}:password::"
+    APP_DB_PASSWORD       = var.db_role_password_arns.app
+    MIGRATION_DB_PASSWORD = var.db_role_password_arns.migrator
+    READONLY_DB_PASSWORD  = var.db_role_password_arns.readonly
+  }
+  secret_kms_key_arns = [module.database.kms_key_arn]
+
+  tags = local.common_tags
+}
+
+# -----------------------------------------------------------------------------
+# CI deploy permissions for this environment (bootstrap creates the role)
+# -----------------------------------------------------------------------------
+data "aws_caller_identity" "current" {}
+
+# Fails the plan if the bootstrap root was never applied.
+data "aws_iam_role" "gha_deploy" {
+  name = local.gha_deploy_role_name
+}
+
+locals {
+  deployed_services = [module.api, module.celery_worker, module.celery_beat, module.dashboard, module.website]
+  deployed_families = concat(local.deployed_services, [module.migrate])
+}
+
+module "gha_deploy_policy" {
+  source = "../../modules/gha-deploy-policy"
+
+  role_name    = data.aws_iam_role.gha_deploy.name
+  region       = var.aws_region
+  account_id   = data.aws_caller_identity.current.account_id
+  cluster_arn  = aws_ecs_cluster.this.arn
+  cluster_name = aws_ecs_cluster.this.name
+
+  service_names            = [for m in local.deployed_services : m.service_name]
+  migrate_task_family      = module.migrate.task_definition_family
+  task_definition_families = [for m in local.deployed_families : m.task_definition_family]
+  # Not db-bootstrap: CI must never run it.
+  pass_role_arns   = flatten([for m in local.deployed_families : [m.execution_role_arn, m.task_role_arn]])
+  log_group_names  = [for m in local.deployed_families : m.log_group_name]
+  distribution_arn = module.cdn.distribution_arn
 }
 
 # -----------------------------------------------------------------------------

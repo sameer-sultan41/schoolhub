@@ -1,7 +1,11 @@
 variable "aws_region" {
-  description = "Region everything except the CloudFront certificate lives in."
+  description = "Region everything except the CloudFront certificate lives in. A region near Pakistan (ADR-0040, D20); widening the list is a reviewed change."
   type        = string
-  default     = "us-east-1"
+
+  validation {
+    condition     = contains(["me-central-1", "ap-south-1"], var.aws_region)
+    error_message = "aws_region must be me-central-1 or ap-south-1."
+  }
 }
 
 variable "platform_domain" {
@@ -44,19 +48,24 @@ variable "vpc_cidr" {
   default     = "10.20.0.0/16"
 }
 
-variable "api_image" {
-  description = "Django API image, tagged with the git SHA. CI overrides this per deploy; the value here is only the bootstrap."
+variable "ecr_registry" {
+  description = "ECR registry host, the bootstrap output ecr_registry. Images are <registry>/schoolhub/<api|dashboard|website>:<image_tag>."
   type        = string
+
+  validation {
+    condition     = can(regex("^[0-9]{12}\\.dkr\\.ecr\\.[a-z0-9-]+\\.amazonaws\\.com$", var.ecr_registry))
+    error_message = "ecr_registry must be <account>.dkr.ecr.<region>.amazonaws.com."
+  }
 }
 
-variable "dashboard_image" {
-  description = "Next.js dashboard image, tagged with the git SHA."
+variable "image_tag" {
+  description = "Full git SHA of the bootstrap images. CI registers new revisions afterwards; this is only the first one. The same image is promoted staging -> production, never rebuilt."
   type        = string
-}
 
-variable "website_image" {
-  description = "Next.js tenant website renderer image, tagged with the git SHA."
-  type        = string
+  validation {
+    condition     = can(regex("^[0-9a-f]{40}$", var.image_tag))
+    error_message = "image_tag must be a full 40-character git SHA."
+  }
 }
 
 variable "uploads_bucket_name" {
@@ -97,8 +106,33 @@ variable "website_revalidate_secret_arn" {
 }
 
 variable "app_database_url_arn" {
-  description = "Secrets Manager ARN holding the application DATABASE_URL — the schoolhub_app role, through PgBouncer. Never the master URL."
+  description = "Secrets Manager ARN holding the application DATABASE_URL — the schoolhub_app role, directly on 5432 in v1 (no pooler, ADR-0040). Never the master URL."
   type        = string
+}
+
+variable "migrator_database_url_arn" {
+  description = "Secrets Manager ARN holding the migrator DATABASE_URL (schoolhub_migrator, directly on 5432). Only the migrate task reads it. Printed by infra/scripts/bootstrap-secrets.sh."
+  type        = string
+}
+
+variable "db_role_password_arns" {
+  description = "Secrets Manager ARNs of the three database role passwords, read by the db-bootstrap task. Printed by infra/scripts/bootstrap-secrets.sh."
+  type = object({
+    app      = string
+    migrator = string
+    readonly = string
+  })
+}
+
+variable "postgres_client_image" {
+  description = "PostgreSQL 18 client image for the db-bootstrap task, pinned by digest (infra/AGENTS.md rule 3)."
+  type        = string
+  default     = "public.ecr.aws/docker/library/postgres:18-alpine@sha256:0115267ab5a509022df9319c77be365cef335adb71556c75f60f5360ee247e71"
+
+  validation {
+    condition     = strcontains(var.postgres_client_image, "@sha256:") && strcontains(var.postgres_client_image, ":18")
+    error_message = "postgres_client_image must be a PostgreSQL 18 image pinned by @sha256: digest."
+  }
 }
 
 variable "sentry_dsn_arn" {

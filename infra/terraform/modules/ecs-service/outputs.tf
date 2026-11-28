@@ -1,11 +1,11 @@
 output "service_name" {
-  description = "Full ECS service name. Used by the deploy and rollback runbooks."
-  value       = aws_ecs_service.this.name
+  description = "Full ECS service name, or null for a task-only module (create_service = false)."
+  value       = try(aws_ecs_service.this[0].name, null)
 }
 
 output "service_arn" {
-  description = "ARN of the ECS service."
-  value       = aws_ecs_service.this.id
+  description = "ARN of the ECS service, or null for a task-only module."
+  value       = try(aws_ecs_service.this[0].id, null)
 }
 
 output "task_definition_arn" {
