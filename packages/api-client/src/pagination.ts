@@ -1,5 +1,5 @@
 import type { CursorPagination, Page, Pagination } from "@schoolhub/types";
-import { isCursorPagination } from "@schoolhub/types";
+import { isCursorPagination, isOffsetPagination } from "@schoolhub/types";
 import type { ApiClient, RequestOptions } from "./client";
 
 /** Cursor pagination default: `?cursor=…&page_size=25`, hard max 100 (api-architecture.md §2.4). */
@@ -90,14 +90,23 @@ export async function collectPages<TItem>(
 }
 
 /**
- * RED stub (Task 9 fix round 1): reads page 1 only. The implementation lands after the RED run.
+ * Drain a page-number list (DRF's `PageNumberPagination`, which `collectPages` doesn't follow):
+ * `page=1, 2, …` until the last page the server reports, bounded by `maxPages` (default 50).
  */
 export async function collectNumberedPages<TItem>(
   client: ApiClient,
   path: string,
   options: PaginateOptions = {},
 ): Promise<TItem[]> {
-  return (await fetchPage<TItem>(client, path, options)).items;
+  const { maxPages = 50, query, ...rest } = options;
+  const items: TItem[] = [];
+  for (let page = 1; page <= maxPages; page += 1) {
+    const result = await fetchPage<TItem>(client, path, { ...rest, query: { ...query, page } });
+    items.push(...result.items);
+    const pagination = result.pagination;
+    if (!pagination || !isOffsetPagination(pagination) || page >= pagination.total_pages) break;
+  }
+  return items;
 }
 
 /**
