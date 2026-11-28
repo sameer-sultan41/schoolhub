@@ -21,7 +21,7 @@ variables {
 }
 
 run "cdn_validation_lists_every_name" {
-  command = apply
+  command = plan
 
   providers = {
     aws           = aws

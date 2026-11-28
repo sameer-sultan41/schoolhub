@@ -61,6 +61,32 @@ override_resource {
   }
 }
 
+# Computed values that feed a for_each or an assertion, known at plan.
+override_resource {
+  target          = module.storage.aws_iam_policy.app_access
+  override_during = plan
+  values = {
+    arn = "arn:aws:iam::111111111111:policy/schoolhub-production-app-access"
+  }
+}
+
+override_resource {
+  target          = module.cache.aws_elasticache_replication_group.this
+  override_during = plan
+  values = {
+    primary_endpoint_address = "master.schoolhub-production.cache.amazonaws.com"
+    port                     = 6379
+  }
+}
+
+override_resource {
+  target          = module.cache.aws_secretsmanager_secret.auth_token
+  override_during = plan
+  values = {
+    arn = "arn:aws:secretsmanager:me-central-1:111111111111:secret:schoolhub-production/redis/auth-token-AbCdEf"
+  }
+}
+
 variables {
   aws_region                       = "me-central-1"
   platform_domain                  = "schoolhub.example.org"
@@ -87,7 +113,7 @@ variables {
 }
 
 run "alb_uses_regional_certificate" {
-  command = apply
+  command = plan
 
   override_resource {
     target          = aws_acm_certificate.alb
@@ -109,7 +135,7 @@ run "alb_uses_regional_certificate" {
 }
 
 run "alb_cert_covers_every_cdn_alias" {
-  command = apply
+  command = plan
 
   assert {
     condition     = length(setsubtract(["schoolhub.example.org", "*.schoolhub.example.org", "school-a.example.net", "school-b.example.net"], concat([aws_acm_certificate.alb.domain_name], tolist(aws_acm_certificate.alb.subject_alternative_names)))) == 0
@@ -118,7 +144,7 @@ run "alb_cert_covers_every_cdn_alias" {
 }
 
 run "alb_validation_reuses_cdn_records" {
-  command = apply
+  command = plan
 
   override_resource {
     target          = aws_acm_certificate.alb
@@ -141,7 +167,7 @@ run "alb_validation_reuses_cdn_records" {
 }
 
 run "redis_token_never_in_environment" {
-  command = apply
+  command = plan
 
   assert {
     condition     = !contains(keys(local.api_environment), "REDIS_AUTH_TOKEN")
@@ -160,7 +186,7 @@ run "redis_token_never_in_environment" {
 }
 
 run "cors_and_csrf_name_the_app_origin" {
-  command = apply
+  command = plan
 
   assert {
     condition     = local.api_environment["CORS_ALLOWED_ORIGINS"] == "https://app.schoolhub.example.org"
@@ -174,7 +200,7 @@ run "cors_and_csrf_name_the_app_origin" {
 }
 
 run "connections_alarm_threshold_set" {
-  command = apply
+  command = plan
 
   assert {
     condition     = module.database.connections_alarm_threshold == 720

@@ -11,6 +11,34 @@ mock_provider "aws" {
   }
 }
 
+# Plan-only (the state bucket has prevent_destroy, so an apply run could not be
+# torn down). Resource-level overrides make the ARNs the policies embed known
+# at plan; the provider-level override_during alone leaves them unknown.
+override_resource {
+  target          = aws_iam_openid_connect_provider.github
+  override_during = plan
+  values = {
+    arn = "arn:aws:iam::111111111111:oidc-provider/token.actions.githubusercontent.com"
+  }
+}
+
+override_resource {
+  target          = aws_kms_key.tfstate
+  override_during = plan
+  values = {
+    arn    = "arn:aws:kms:me-central-1:111111111111:key/tfstate"
+    key_id = "tfstate"
+  }
+}
+
+override_resource {
+  target          = aws_ecr_repository.this
+  override_during = plan
+  values = {
+    arn = "arn:aws:ecr:me-central-1:111111111111:repository/schoolhub/image"
+  }
+}
+
 variables {
   aws_region                 = "me-central-1"
   github_oidc_subject_prefix = "repo:acme/schoolhub"
@@ -19,7 +47,7 @@ variables {
 }
 
 run "deploy_production_trusts_only_deploy_env_called_by_deploy_on_main" {
-  command = apply
+  command = plan
 
   assert {
     condition     = length(jsondecode(aws_iam_role.deploy["production"].assume_role_policy).Statement) == 1
@@ -38,7 +66,7 @@ run "deploy_production_trusts_only_deploy_env_called_by_deploy_on_main" {
 }
 
 run "deploy_staging_trusts_only_deploy_env_called_by_deploy_on_main" {
-  command = apply
+  command = plan
 
   assert {
     condition     = length(jsondecode(aws_iam_role.deploy["staging"].assume_role_policy).Statement) == 1
@@ -57,7 +85,7 @@ run "deploy_staging_trusts_only_deploy_env_called_by_deploy_on_main" {
 }
 
 run "plan_production_rejects_pull_request" {
-  command = apply
+  command = plan
 
   assert {
     condition     = length(jsondecode(aws_iam_role.plan["production"].assume_role_policy).Statement) == 1
@@ -76,7 +104,7 @@ run "plan_production_rejects_pull_request" {
 }
 
 run "plan_staging_wildcard_only_in_pr_number" {
-  command = apply
+  command = plan
 
   assert {
     condition = one([
@@ -96,7 +124,7 @@ run "plan_staging_wildcard_only_in_pr_number" {
 }
 
 run "every_role_session_is_7200" {
-  command = apply
+  command = plan
 
   assert {
     condition     = alltrue([for r in concat(values(aws_iam_role.deploy), values(aws_iam_role.plan)) : r.max_session_duration == 7200])
@@ -105,7 +133,7 @@ run "every_role_session_is_7200" {
 }
 
 run "production_deploy_ecr_actions_exact" {
-  command = apply
+  command = plan
 
   assert {
     condition = sort(distinct(flatten([
@@ -117,7 +145,7 @@ run "production_deploy_ecr_actions_exact" {
 }
 
 run "plan_role_reads_own_tfvars_only" {
-  command = apply
+  command = plan
 
   assert {
     condition = anytrue([
@@ -144,7 +172,7 @@ run "region_allow_list" {
 }
 
 run "plan_role_can_write_lock_with_kms" {
-  command = apply
+  command = plan
 
   assert {
     condition = alltrue([
@@ -168,7 +196,7 @@ run "plan_role_can_write_lock_with_kms" {
 }
 
 run "plan_role_state_scoped" {
-  command = apply
+  command = plan
 
   assert {
     condition     = !strcontains(aws_iam_role_policy.plan["staging"].policy, "schoolhub/production/")
@@ -182,7 +210,7 @@ run "plan_role_state_scoped" {
 }
 
 run "staging_plan_denies_foreign_data_plane" {
-  command = apply
+  command = plan
 
   assert {
     condition = length(setsubtract(
@@ -207,7 +235,7 @@ run "staging_plan_denies_foreign_data_plane" {
 }
 
 run "ecr_immutable" {
-  command = apply
+  command = plan
 
   assert {
     condition     = alltrue([for r in values(aws_ecr_repository.this) : r.image_tag_mutability == "IMMUTABLE"])
@@ -216,7 +244,7 @@ run "ecr_immutable" {
 }
 
 run "ecr_expiry_is_age_based" {
-  command = apply
+  command = plan
 
   assert {
     condition     = alltrue([for r in jsondecode(aws_ecr_lifecycle_policy.this["api"].policy).rules : r.selection.countType == "sinceImagePushed"])

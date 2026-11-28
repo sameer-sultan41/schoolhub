@@ -34,7 +34,7 @@ variables {
 }
 
 run "beat_never_overlaps" {
-  command = apply
+  command = plan
 
   variables {
     service_name       = "celery-beat"
@@ -56,7 +56,7 @@ run "beat_never_overlaps" {
 }
 
 run "web_service_rolls_with_full_capacity" {
-  command = apply
+  command = plan
 
   assert {
     condition     = aws_ecs_service.this[0].deployment_maximum_percent == 200 && aws_ecs_service.this[0].deployment_minimum_healthy_percent == 100
@@ -65,7 +65,7 @@ run "web_service_rolls_with_full_capacity" {
 }
 
 run "task_only_creates_no_service" {
-  command = apply
+  command = plan
 
   variables {
     service_name   = "migrate"
@@ -86,7 +86,7 @@ run "task_only_creates_no_service" {
 }
 
 run "json_key_secret_scoped_to_secret_arn" {
-  command = apply
+  command = plan
 
   variables {
     secret_arns = {
@@ -102,7 +102,7 @@ run "json_key_secret_scoped_to_secret_arn" {
 }
 
 run "kms_decrypt_only_when_keys_given" {
-  command = apply
+  command = plan
 
   variables {
     secret_arns = {
@@ -117,7 +117,7 @@ run "kms_decrypt_only_when_keys_given" {
 }
 
 run "kms_decrypt_scoped_to_given_keys" {
-  command = apply
+  command = plan
 
   variables {
     secret_arns = {
