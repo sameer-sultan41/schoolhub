@@ -23,6 +23,7 @@ import { isMfaChallenge } from "@schoolhub/types";
 import { mfaVerifyPath, Paths } from "@/config/paths";
 import { env } from "@/lib/env";
 import { homePathFor } from "@/lib/home-path";
+import { safeNextPath } from "@/lib/safe-next-path";
 import { parseTenantSlug } from "@/lib/host";
 import { ApiError, Services } from "@/services";
 import { loginSchema, type LoginValues } from "@/services/modules/auth/auth.schema";
@@ -62,7 +63,7 @@ export function LoginForm() {
       // redirect straight from the client with no new request at all.
       router.refresh();
       // A student or guardian lands on the portal; the staff shell would only bounce them there.
-      router.replace(next?.startsWith("/") ? next : homePathFor(data.user));
+      router.replace(safeNextPath(next) ?? homePathFor(data.user));
     },
     onError: (error: unknown) => {
       if (!(error instanceof ApiError)) return;

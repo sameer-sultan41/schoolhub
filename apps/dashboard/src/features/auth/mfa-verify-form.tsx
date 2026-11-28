@@ -23,6 +23,7 @@ import {
 
 import { Paths } from "@/config/paths";
 import { homePathFor } from "@/lib/home-path";
+import { safeNextPath } from "@/lib/safe-next-path";
 import { ApiError, Services } from "@/services";
 import { createMfaCodeSchema, type MfaCodeValues } from "@/services/modules/auth/auth.schema";
 import { AuthPageHeader } from "./auth-page-header";
@@ -67,7 +68,7 @@ export function MfaVerifyForm() {
       queryClient.clear();
       const next = searchParams.get("next");
       router.refresh();
-      router.replace(next?.startsWith("/") ? next : homePathFor(session.user));
+      router.replace(safeNextPath(next) ?? homePathFor(session.user));
     },
   });
 
