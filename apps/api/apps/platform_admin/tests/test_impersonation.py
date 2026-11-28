@@ -7,16 +7,23 @@ request, even though the access token's own ``exp`` is still in the future.
 from __future__ import annotations
 
 import hashlib
+import json
+import logging
+import time
+from concurrent.futures import ThreadPoolExecutor
 from datetime import timedelta
 from unittest import mock
 from urllib.parse import parse_qs, urlsplit
 
 from django.conf import settings
+from django.db import connection, connections, transaction
+from django.test import TransactionTestCase
 from django.utils import timezone
 from rest_framework.test import APIClient
 from rest_framework_simplejwt.exceptions import TokenError
 from rest_framework_simplejwt.tokens import AccessToken, RefreshToken
 
+from apps.platform_admin.impersonation import services as impersonation_services
 from apps.platform_admin.models import ImpersonationGrant
 from apps.platform_admin.tests.base import (
     TENANTS_URL,
@@ -27,6 +34,7 @@ from apps.platform_admin.tests.base import (
 )
 from apps.school_organization.models import Campus
 from apps.school_organization.tests.factories import grant
+from core.api.logging import JSONFormatter
 from core.audit.models import AuditLog
 from core.notifications.models import Notification
 from core.rbac import impersonation
@@ -287,7 +295,9 @@ class AuthenticatorTests(ImpersonationTestCase):
         self.assertEqual(self.client.delete(f"{GRANTS_URL}/{row.pk}").status_code, 204)
 
         self.assertGreater(AccessToken(access)["exp"], timezone.now().timestamp())
-        self.assert_error(client.get(ME_URL), 401, "impersonation_ended")
+        ended = client.get(ME_URL)
+        self.assert_error(ended, 401, "impersonation_ended")
+        self.assertTrue(ended["WWW-Authenticate"].startswith("Bearer"), "RFC 9110 §15.5.2")
 
     def test_holder_losing_key_ends_session(self) -> None:
         access, _ = self.impersonate()
@@ -550,3 +560,190 @@ class SnapshotTests(ImpersonationTestCase):
             snapshot = snapshot_tenant(self.tenant.pk)
 
         self.assertEqual(snapshot.impersonations_30d, 1)
+
+
+class ReviewFixTests(ImpersonationTestCase):
+    """Task 10 review: attribution of reads, code reuse, the sweep, counting and the notice."""
+
+    def owner(self) -> User:
+        owner = tenant_user(self.tenant, "owner@school.test")
+        owner_role = Role.objects.get(tenant=None, slug="school_owner")
+        UserRole.objects.create(user=owner, role=owner_role, tenant=self.tenant)
+        return owner
+
+    def test_an_impersonated_request_logs_the_operator_target_method_and_path(self) -> None:
+        access, row = self.impersonate()
+
+        with self.assertLogs("core.rbac.impersonation", level="INFO") as logs:
+            self.as_bearer(access).get(ME_URL)
+
+        [record] = [r for r in logs.records if r.getMessage() == "impersonated request"]
+        self.assertEqual(record.impersonated_by, str(self.operator.pk))
+        self.assertEqual(record.grant_id, str(row.pk))
+        self.assertEqual(record.target_user_id, str(self.target.pk))
+        self.assertEqual(record.method, "GET")
+        self.assertEqual(record.path, ME_URL)
+        self.assertEqual(record.status, 200)
+
+    def test_a_normal_request_logs_no_impersonation(self) -> None:
+        own = APIClient()
+        own.credentials(HTTP_AUTHORIZATION=f"Bearer {AccessToken.for_user(self.target)}")
+        with self.assertNoLogs("core.rbac.impersonation", level="INFO"):
+            own.get(ME_URL)
+
+    def test_the_json_log_line_carries_the_impersonation_while_bound(self) -> None:
+        _, row = self.impersonate()
+        live = impersonation.LiveGrant(
+            grant_id=row.pk,
+            operator_id=self.operator.pk,
+            operator_name="",
+            expires_at=row.expires_at,
+        )
+        record = logging.LogRecord("x", logging.INFO, __file__, 1, "read", None, None)
+
+        token = impersonation.bind_impersonation(live)
+        try:
+            payload = json.loads(JSONFormatter().format(record))
+        finally:
+            impersonation.unbind_impersonation(token)
+
+        self.assertEqual(payload["impersonated_by"], str(self.operator.pk))
+        self.assertEqual(payload["grant_id"], str(row.pk))
+        self.assertNotIn("impersonated_by", json.loads(JSONFormatter().format(record)))
+
+    def test_a_reused_code_revokes_its_grant(self) -> None:
+        started = self.start()
+        code = handoff_code(started)
+        first = self.exchange(code).json()["data"]["access"]
+
+        self.assert_error(self.exchange(code), 400, "invalid_link")
+
+        row = ImpersonationGrant.objects.get(pk=started.json()["data"]["grant_id"])
+        self.assertEqual(row.end_reason, "revoked")
+        self.assert_error(self.as_bearer(first).get(ME_URL), 401, "impersonation_ended")
+        refused = AuditLog.objects.get(action="platform.impersonation.exchange_refused")
+        self.assertEqual(refused.tenant_id, self.tenant.pk)
+        self.assertEqual(refused.after["grant_id"], str(row.pk))
+
+    def test_a_school_suspended_mid_session_ends_it(self) -> None:
+        access, _ = self.impersonate()
+        self.tenant.status = TenantStatus.SUSPENDED
+        self.tenant.save(update_fields=["status"])
+
+        self.assert_error(self.as_bearer(access).get(ME_URL), 401, "impersonation_ended")
+
+    def test_a_holder_who_is_not_a_platform_user_may_not_impersonate(self) -> None:
+        not_platform = User(is_active=True, is_platform=False, mfa_enabled=True)
+        keys = frozenset({impersonation_services.IMPERSONATE_KEY})
+        with mock.patch.object(
+            impersonation_services, "effective_permission_keys", return_value=keys
+        ):
+            self.assertFalse(impersonation_services.holder_may_impersonate(not_platform))
+            not_platform.is_platform = True
+            self.assertTrue(impersonation_services.holder_may_impersonate(not_platform))
+
+    def test_security_events_under_impersonation_carry_the_operator(self) -> None:
+        access, _ = self.impersonate()
+        self.as_bearer(access).post("/api/v1/auth/logout")
+
+        event = AuditLog.objects.get(action="platform.impersonation.released")
+        self.assertEqual(event.actor_id, self.target.pk)
+        self.assertEqual(event.impersonated_by, self.operator.pk)
+
+    def test_the_owners_are_told_when_it_ends_without_the_operator_s_email(self) -> None:
+        owner = self.owner()
+        User.objects.filter(pk=self.operator.pk).update(first_name="", last_name="")
+        access, row = self.impersonate()
+        self.as_bearer(access).post(END_URL)
+
+        with tenant_context(self.tenant.pk):
+            started, ended = Notification.objects.filter(
+                event_key="platform.impersonation", user_id=owner.pk
+            ).order_by("created_at")
+        self.assertIn("at the latest", started.body)
+        self.assertNotIn("at the latest", ended.body)
+        self.assertIn("ended", ended.body)
+        for notice in (started, ended):
+            self.assertNotIn(self.operator.email, notice.body)
+            self.assertIn("SchoolHub support", notice.body)
+
+    def test_a_stale_grant_is_closed_at_its_own_end(self) -> None:
+        _, first = self.impersonate()
+        ended = timezone.now() - timedelta(minutes=1)
+        ImpersonationGrant.objects.filter(pk=first.pk).update(expires_at=ended)
+
+        self.impersonate()
+
+        first.refresh_from_db()
+        self.assertEqual(first.end_reason, "expired")
+        self.assertEqual(first.released_at, first.expires_at)
+
+    def test_a_retry_is_not_counted_as_a_second_impersonation(self) -> None:
+        from apps.platform_admin.usage.services import snapshot_tenant
+
+        self.start()
+        self.start()
+
+        with tenant_context(self.tenant.pk):
+            snapshot = snapshot_tenant(self.tenant.pk)
+        self.assertEqual(snapshot.impersonations_30d, 1)
+
+    def test_the_sweep_ends_a_grant_only_with_its_event(self) -> None:
+        from apps.platform_admin import tasks
+
+        _, row = self.impersonate()
+        ImpersonationGrant.objects.filter(pk=row.pk).update(
+            expires_at=timezone.now() - timedelta(minutes=1)
+        )
+
+        with mock.patch.object(
+            tasks.impersonation_events, "ended", side_effect=RuntimeError("worker died")
+        ):
+            result = tasks.close_expired_impersonations()
+
+        self.assertEqual(result, {"closed": 0, "failed": 1})
+        row.refresh_from_db()
+        self.assertIsNone(row.released_at, "the end is not recorded without its event")
+
+
+class ConcurrentExchangeTests(TransactionTestCase):
+    """Two exchanges of one code at once: the conditional UPDATE lets exactly one through."""
+
+    def test_concurrent_exchanges_spend_the_code_once(self) -> None:
+        tenant = make_tenant(status=TenantStatus.ACTIVE)
+        target = tenant_user(tenant)
+        operator = platform_user("platform_support")
+        started = impersonation_services.start(
+            tenant=tenant,
+            operator_id=operator.pk,
+            target_user_id=target.pk,
+            reason=REASON,
+            duration_minutes=30,
+        )
+
+        def contender():
+            try:
+                with transaction.atomic():
+                    return impersonation_services.exchange(started.code)
+            finally:
+                connections.close_all()
+
+        with ThreadPoolExecutor(max_workers=1) as pool:
+            with transaction.atomic():
+                first = impersonation_services.exchange(started.code)
+                contending = pool.submit(contender)
+                deadline = time.monotonic() + 10
+                while time.monotonic() < deadline:
+                    with connection.cursor() as cursor:
+                        cursor.execute("SELECT count(*) FROM pg_locks WHERE NOT granted")
+                        if cursor.fetchone()[0]:
+                            break
+                    time.sleep(0.05)
+                else:
+                    self.fail("the second exchange never waited on the row")
+            second = contending.result(timeout=10)
+
+        self.assertIsNotNone(first.token)
+        self.assertIsNone(second.token)
+        row = ImpersonationGrant.objects.get(pk=started.grant.pk)
+        self.assertIsNone(row.released_at, "a concurrent duplicate does not revoke the grant")
