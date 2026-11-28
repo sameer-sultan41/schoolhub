@@ -1074,20 +1074,20 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/Exchange'
+              $ref: '#/components/schemas/ImpersonationExchange'
           application/x-www-form-urlencoded:
             schema:
-              $ref: '#/components/schemas/Exchange'
+              $ref: '#/components/schemas/ImpersonationExchange'
           multipart/form-data:
             schema:
-              $ref: '#/components/schemas/Exchange'
+              $ref: '#/components/schemas/ImpersonationExchange'
         required: true
       responses:
         '200':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ExchangeResponse'
+                $ref: '#/components/schemas/ImpersonationExchangeResponse'
           description: ''
         '400':
           description: invalid_link
@@ -10159,7 +10159,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/PaginatedTenantUserList'
+                $ref: '#/components/schemas/PaginatedPlatformTenantUserList'
           description: ''
   /api/v1/platform/tenants/{tenant_pk}:delete:
     post:
@@ -10255,13 +10255,13 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/Impersonate'
+              $ref: '#/components/schemas/ImpersonateRequest'
           application/x-www-form-urlencoded:
             schema:
-              $ref: '#/components/schemas/Impersonate'
+              $ref: '#/components/schemas/ImpersonateRequest'
           multipart/form-data:
             schema:
-              $ref: '#/components/schemas/Impersonate'
+              $ref: '#/components/schemas/ImpersonateRequest'
         required: true
       security:
       - jwtAuth: []
@@ -10270,7 +10270,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/GrantStarted'
+                $ref: '#/components/schemas/ImpersonationGrantStarted'
           description: ''
         '409':
           description: 'conflict: the school is not operational.'
@@ -19598,26 +19598,6 @@ components:
         * `final` - Final
         * `practical` - Practical
         * `custom` - Custom
-    Exchange:
-      type: object
-      properties:
-        code:
-          type: string
-          maxLength: 200
-      required:
-      - code
-    ExchangeResponse:
-      type: object
-      description: 'Schema only: an access token with no refresh token, valid until
-        the grant expires.'
-      properties:
-        access:
-          type: string
-        expires_in:
-          type: integer
-      required:
-      - access
-      - expires_in
     ExitRequest:
       type: object
       properties:
@@ -21159,25 +21139,6 @@ components:
       - grant-register
       type: string
       description: '* `grant-register` - grant-register'
-    GrantStarted:
-      type: object
-      description: 'Schema only: the grant, and the link that opens the school''s
-        dashboard as the user.'
-      properties:
-        grant_id:
-          type: string
-          format: uuid
-        expires_at:
-          type: string
-          format: date-time
-        handoff_url:
-          type: string
-          description: Single use, within PLATFORM_HANDOFF_CODE_TTL_SECONDS; the code
-            is its fragment.
-      required:
-      - expires_at
-      - grant_id
-      - handoff_url
     GrantTypeEnum:
       enum:
       - discount
@@ -21387,7 +21348,7 @@ components:
           minItems: 1
       required:
       - student_ids
-    Impersonate:
+    ImpersonateRequest:
       type: object
       properties:
         user_id:
@@ -21395,7 +21356,8 @@ components:
           format: uuid
         reason:
           type: string
-          description: Why; shown in the audit log.
+          description: Why. Kept in the audit log, and shown to the school's owners
+            in their notice.
           maxLength: 1000
         duration_minutes:
           type: integer
@@ -21404,6 +21366,45 @@ components:
       - duration_minutes
       - reason
       - user_id
+    ImpersonationExchange:
+      type: object
+      properties:
+        code:
+          type: string
+          maxLength: 200
+      required:
+      - code
+    ImpersonationExchangeResponse:
+      type: object
+      description: 'Schema only: an access token with no refresh token, valid until
+        the grant expires.'
+      properties:
+        access:
+          type: string
+        expires_in:
+          type: integer
+      required:
+      - access
+      - expires_in
+    ImpersonationGrantStarted:
+      type: object
+      description: 'Schema only: the grant, and the link that opens the school''s
+        dashboard as the user.'
+      properties:
+        grant_id:
+          type: string
+          format: uuid
+        expires_at:
+          type: string
+          format: date-time
+        handoff_url:
+          type: string
+          description: Single use, within PLATFORM_HANDOFF_CODE_TTL_SECONDS; the code
+            is its fragment.
+      required:
+      - expires_at
+      - grant_id
+      - handoff_url
     ImpersonationSummary:
       type: object
       description: Who is acting as this user, and until when; the dashboard's banner
@@ -24101,6 +24102,27 @@ components:
                   type: integer
                 total_pages:
                   type: integer
+    PaginatedPlatformTenantUserList:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/PlatformTenantUser'
+        meta:
+          type: object
+          properties:
+            pagination:
+              type: object
+              properties:
+                page:
+                  type: integer
+                page_size:
+                  type: integer
+                total_count:
+                  type: integer
+                total_pages:
+                  type: integer
     PaginatedPromotionBatchList:
       type: object
       properties:
@@ -24570,27 +24592,6 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/Tenant'
-        meta:
-          type: object
-          properties:
-            pagination:
-              type: object
-              properties:
-                page:
-                  type: integer
-                page_size:
-                  type: integer
-                total_count:
-                  type: integer
-                total_pages:
-                  type: integer
-    PaginatedTenantUserList:
-      type: object
-      properties:
-        data:
-          type: array
-          items:
-            $ref: '#/components/schemas/TenantUser'
         meta:
           type: object
           properties:
@@ -27828,6 +27829,32 @@ components:
       - key
       - sections
       - title
+    PlatformTenantUser:
+      type: object
+      description: 'A school user the console may impersonate: who, and their roles''
+        slugs.'
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        name:
+          type: string
+          readOnly: true
+        email:
+          type: string
+          format: email
+          readOnly: true
+        roles:
+          type: array
+          items:
+            type: string
+          readOnly: true
+      required:
+      - email
+      - id
+      - name
+      - roles
     PortalChild:
       type: object
       properties:
@@ -31846,32 +31873,6 @@ components:
       - storage_bytes
       - students
       - taken_at
-    TenantUser:
-      type: object
-      description: 'A school user the console may impersonate: who, and their roles''
-        slugs.'
-      properties:
-        id:
-          type: string
-          format: uuid
-          readOnly: true
-        name:
-          type: string
-          readOnly: true
-        email:
-          type: string
-          format: email
-          readOnly: true
-        roles:
-          type: array
-          items:
-            type: string
-          readOnly: true
-      required:
-      - email
-      - id
-      - name
-      - roles
     Term:
       type: object
       properties:

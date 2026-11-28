@@ -28,7 +28,7 @@ export const IMPERSONATION_TOKEN = [
 ].join(".");
 
 /** `POST /platform/tenants/{id}:impersonate`'s answer: the grant and the school's handoff link. */
-export function grantStarted(slug: string): ApiSchemas["GrantStarted"] {
+export function grantStarted(slug: string): ApiSchemas["ImpersonationGrantStarted"] {
   return {
     grant_id: "8a9b0c1d-2e3f-4a5b-8c7d-6e5f4a3b2c1d",
     expires_at: new Date(Date.now() + GRANT_SECONDS * 1000).toISOString(),
@@ -66,7 +66,7 @@ export function impersonationModule(options: ImpersonationModuleOptions): MockMo
         }
         codeSpent = true;
         expiresAt = new Date(Date.now() + GRANT_SECONDS * 1000).toISOString();
-        return ok<ApiSchemas["ExchangeResponse"]>({
+        return ok<ApiSchemas["ImpersonationExchangeResponse"]>({
           access: IMPERSONATION_TOKEN,
           expires_in: GRANT_SECONDS,
         });

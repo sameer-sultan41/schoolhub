@@ -11,7 +11,7 @@ type TenantStatus = Tenant["status"];
 export interface PlatformModuleOptions {
   tenants?: Tenant[];
   /** The users `GET /platform/tenants/{id}/users` lists, whom `:impersonate` accepts. */
-  users?: ApiSchemas["TenantUser"][];
+  users?: ApiSchemas["PlatformTenantUser"][];
 }
 
 const NOW = "2026-11-24T09:00:00Z";
@@ -120,7 +120,7 @@ export function platformModule(options: PlatformModuleOptions = {}): MockModule 
       const index = tenants.findIndex((candidate) => candidate.id === id);
       const tenant = tenants[index];
       if (tenant && action === "impersonate") {
-        const body = request.json() as ApiSchemas["Impersonate"] | null;
+        const body = request.json() as ApiSchemas["ImpersonateRequest"] | null;
         if (!users.some((user) => user.id === body?.user_id)) {
           return fail(422, "The user is not an active user of this school.", {
             code: "domain_rule_violation",

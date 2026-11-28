@@ -8924,14 +8924,6 @@ export interface components {
          * @enum {string}
          */
         ExamTypeEnum: "unit_test" | "midterm" | "final" | "practical" | "custom";
-        Exchange: {
-            code: string;
-        };
-        /** @description Schema only: an access token with no refresh token, valid until the grant expires. */
-        ExchangeResponse: {
-            access: string;
-            expires_in: number;
-        };
         ExitRequest: {
             /** Format: date */
             exit_date: string;
@@ -9677,15 +9669,6 @@ export interface components {
          * @enum {string}
          */
         GrantRegisterReportRowKindEnum: "grant-register";
-        /** @description Schema only: the grant, and the link that opens the school's dashboard as the user. */
-        GrantStarted: {
-            /** Format: uuid */
-            grant_id: string;
-            /** Format: date-time */
-            expires_at: string;
-            /** @description Single use, within PLATFORM_HANDOFF_CODE_TTL_SECONDS; the code is its fragment. */
-            handoff_url: string;
-        };
         /**
          * @description * `discount` - discount
          *     * `scholarship` - scholarship
@@ -9788,13 +9771,30 @@ export interface components {
         IdCardGenerateRequest: {
             student_ids: string[];
         };
-        Impersonate: {
+        ImpersonateRequest: {
             /** Format: uuid */
             user_id: string;
-            /** @description Why; shown in the audit log. */
+            /** @description Why. Kept in the audit log, and shown to the school's owners in their notice. */
             reason: string;
             /** @description 1 to PLATFORM_IMPERSONATION_MAX_MINUTES; outside it, a 422. */
             duration_minutes: number;
+        };
+        ImpersonationExchange: {
+            code: string;
+        };
+        /** @description Schema only: an access token with no refresh token, valid until the grant expires. */
+        ImpersonationExchangeResponse: {
+            access: string;
+            expires_in: number;
+        };
+        /** @description Schema only: the grant, and the link that opens the school's dashboard as the user. */
+        ImpersonationGrantStarted: {
+            /** Format: uuid */
+            grant_id: string;
+            /** Format: date-time */
+            expires_at: string;
+            /** @description Single use, within PLATFORM_HANDOFF_CODE_TTL_SECONDS; the code is its fragment. */
+            handoff_url: string;
         };
         /** @description Who is acting as this user, and until when; the dashboard's banner shows it. */
         ImpersonationSummary: {
@@ -11050,6 +11050,17 @@ export interface components {
                 };
             };
         };
+        PaginatedPlatformTenantUserList: {
+            data?: components["schemas"]["PlatformTenantUser"][];
+            meta?: {
+                pagination?: {
+                    page?: number;
+                    page_size?: number;
+                    total_count?: number;
+                    total_pages?: number;
+                };
+            };
+        };
         PaginatedPromotionBatchList: {
             data?: components["schemas"]["PromotionBatch"][];
             meta?: {
@@ -11281,17 +11292,6 @@ export interface components {
         };
         PaginatedTenantList: {
             data?: components["schemas"]["Tenant"][];
-            meta?: {
-                pagination?: {
-                    page?: number;
-                    page_size?: number;
-                    total_count?: number;
-                    total_pages?: number;
-                };
-            };
-        };
-        PaginatedTenantUserList: {
-            data?: components["schemas"]["TenantUser"][];
             meta?: {
                 pagination?: {
                     page?: number;
@@ -12918,6 +12918,15 @@ export interface components {
                     [key: string]: unknown;
                 }[];
             };
+        };
+        /** @description A school user the console may impersonate: who, and their roles' slugs. */
+        PlatformTenantUser: {
+            /** Format: uuid */
+            readonly id: string;
+            readonly name: string;
+            /** Format: email */
+            readonly email: string;
+            readonly roles: string[];
         };
         PortalChild: {
             student: components["schemas"]["PortalStudent"];
@@ -14740,15 +14749,6 @@ export interface components {
             readonly impersonations_30d: number | null;
             readonly modules_enabled: string[];
         };
-        /** @description A school user the console may impersonate: who, and their roles' slugs. */
-        TenantUser: {
-            /** Format: uuid */
-            readonly id: string;
-            readonly name: string;
-            /** Format: email */
-            readonly email: string;
-            readonly roles: string[];
-        };
         Term: {
             /** Format: uuid */
             readonly id: string;
@@ -15879,9 +15879,9 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["Exchange"];
-                "application/x-www-form-urlencoded": components["schemas"]["Exchange"];
-                "multipart/form-data": components["schemas"]["Exchange"];
+                "application/json": components["schemas"]["ImpersonationExchange"];
+                "application/x-www-form-urlencoded": components["schemas"]["ImpersonationExchange"];
+                "multipart/form-data": components["schemas"]["ImpersonationExchange"];
             };
         };
         responses: {
@@ -15890,7 +15890,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ExchangeResponse"];
+                    "application/json": components["schemas"]["ImpersonationExchangeResponse"];
                 };
             };
             /** @description invalid_link */
@@ -22651,7 +22651,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["PaginatedTenantUserList"];
+                    "application/json": components["schemas"]["PaginatedPlatformTenantUserList"];
                 };
             };
         };
@@ -22723,9 +22723,9 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["Impersonate"];
-                "application/x-www-form-urlencoded": components["schemas"]["Impersonate"];
-                "multipart/form-data": components["schemas"]["Impersonate"];
+                "application/json": components["schemas"]["ImpersonateRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["ImpersonateRequest"];
+                "multipart/form-data": components["schemas"]["ImpersonateRequest"];
             };
         };
         responses: {
@@ -22734,7 +22734,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["GrantStarted"];
+                    "application/json": components["schemas"]["ImpersonationGrantStarted"];
                 };
             };
             /** @description conflict: the school is not operational. */

@@ -41,9 +41,9 @@ export type ExportDownload = ApiSchemas["ExportDownload"];
 export type PlatformReport = ApiSchemas["PlatformReport"];
 
 /** A school user the console may impersonate, and starting that impersonation (ADR-0037). */
-export type TenantUser = ApiSchemas["TenantUser"];
-export type ImpersonateInput = ApiSchemas["Impersonate"];
-export type GrantStarted = ApiSchemas["GrantStarted"];
+export type TenantUser = ApiSchemas["PlatformTenantUser"];
+export type ImpersonateInput = ApiSchemas["ImpersonateRequest"];
+export type GrantStarted = ApiSchemas["ImpersonationGrantStarted"];
 
 /** A quota metric's limit: a whole number, or `null` for unlimited. */
 export type Limits = Record<string, number | null>;

@@ -19,7 +19,7 @@ export type InvitationAccept = ApiSchemas["InvitationAccept"];
 export type PasswordResetRequest = ApiSchemas["PasswordResetRequest"];
 export type PasswordResetConfirm = ApiSchemas["PasswordResetConfirm"];
 /** `/auth/impersonation:exchange`'s answer: an access token with no refresh token (ADR-0037). */
-export type ImpersonationExchange = ApiSchemas["ExchangeResponse"];
+export type ImpersonationExchange = ApiSchemas["ImpersonationExchangeResponse"];
 /** `POST /auth/change-password`'s body (generated, ADR-0017). */
 export type ChangePasswordInput = ApiSchemas["ChangePassword"];
 
