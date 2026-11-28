@@ -4,6 +4,7 @@ import userEvent from "@testing-library/user-event";
 import type { PermissionKey } from "@schoolhub/types";
 
 import { Services, type TenantRecord } from "@/services";
+import { downloadFile } from "@/lib/helpers";
 import { USER_LOADED, UserLoaded } from "@/test-fixtures/user-loaded";
 import { renderWithProviders, setUrl } from "@/test-utils";
 import {
@@ -23,6 +24,11 @@ jest.mock("next/navigation", () => {
 
 jest.mock("sonner", () => ({ toast: { success: jest.fn(), error: jest.fn() } }));
 
+jest.mock("@/lib/helpers", () => ({
+  ...jest.requireActual<Record<string, unknown>>("@/lib/helpers"),
+  downloadFile: jest.fn(),
+}));
+
 jest.mock("@/services", () =>
   jest
     .requireActual<{ platformServicesMock: () => unknown }>(
@@ -33,6 +39,22 @@ jest.mock("@/services", () =>
 
 const auth = Services.auth as jest.Mocked<typeof Services.auth>;
 const platform = Services.platform as jest.Mocked<typeof Services.platform>;
+
+/** A school's export job as the poll answers it (`BackgroundJob`: no link). */
+function exportJob(id: string, status: "succeeded" | "failed") {
+  return {
+    id,
+    job_type: "tenant_export",
+    status,
+    progress: status === "succeeded" ? 100 : 40,
+    result: null,
+    error: status === "failed" ? "The export broke." : null,
+    started_at: null,
+    finished_at: null,
+    created_at: "2026-11-24T09:00:00Z",
+    updated_at: "2026-11-24T09:01:00Z",
+  };
+}
 
 const NO_LIMITS = {
   students: null,
@@ -211,20 +233,12 @@ describe("TenantDetail", () => {
     });
   });
 
-  it("exports first, polling the job until its download link is ready", async () => {
-    platform.exportTenant.mockResolvedValue({ jobId: "job-1" });
-    platform.fetchTenantJob.mockResolvedValue({
-      id: "job-1",
-      job_type: "tenant_export",
-      status: "succeeded",
-      progress: 100,
-      result: null,
-      error: null,
-      started_at: null,
-      finished_at: null,
-      created_at: "2026-11-24T09:00:00Z",
-      updated_at: "2026-11-24T09:01:00Z",
+  it("exports first, polling the job, then downloads through an audited :download link", async () => {
+    platform.exportTenant.mockResolvedValue({ job_id: "job-1", status: "queued" });
+    platform.fetchTenantJob.mockResolvedValue(exportJob("job-1", "succeeded"));
+    platform.downloadTenantExport.mockResolvedValue({
       download_url: "https://storage.test/export.zip",
+      expires_in: 300,
     });
     const user = renderDetail(tenantRecord({ status: "suspended" }));
 
@@ -233,7 +247,35 @@ describe("TenantDetail", () => {
     await user.click(within(dialog).getByRole("button", { name: "Export first" }));
 
     expect(await within(dialog).findByText(/the export is ready/i)).toBeInTheDocument();
-    expect(within(dialog).getByRole("button", { name: "Download the export" })).toBeInTheDocument();
     expect(platform.fetchTenantJob).toHaveBeenCalledWith(TENANT_ID, "job-1");
+    await user.click(within(dialog).getByRole("button", { name: "Download the export" }));
+
+    await waitFor(() => {
+      expect(downloadFile).toHaveBeenCalledWith("https://storage.test/export.zip");
+    });
+    expect(platform.downloadTenantExport).toHaveBeenCalledWith(TENANT_ID, "job-1");
+  });
+
+  it("starts a new export under a new key after one fails", async () => {
+    // The server replays a key's first 202, so retrying under the failed job's key would only
+    // hand back the failed job.
+    platform.exportTenant
+      .mockResolvedValueOnce({ job_id: "job-1", status: "queued" })
+      .mockResolvedValueOnce({ job_id: "job-2", status: "queued" });
+    platform.fetchTenantJob.mockImplementation((_tenant, id) =>
+      Promise.resolve(exportJob(id, id === "job-1" ? "failed" : "succeeded")),
+    );
+    const user = renderDetail(tenantRecord({ status: "suspended" }));
+
+    await user.click(await screen.findByRole("button", { name: "Delete" }));
+    const dialog = await screen.findByRole("dialog");
+    await user.click(within(dialog).getByRole("button", { name: "Export first" }));
+    expect(await within(dialog).findByText("The export broke.")).toBeInTheDocument();
+
+    await user.click(within(dialog).getByRole("button", { name: "Export first" }));
+
+    expect(await within(dialog).findByText(/the export is ready/i)).toBeInTheDocument();
+    const [first, second] = platform.exportTenant.mock.calls;
+    expect(second?.[1].idempotencyKey).not.toBe(first?.[1].idempotencyKey);
   });
 });

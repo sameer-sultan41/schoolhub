@@ -208,6 +208,33 @@ describe("LoginForm", () => {
     });
   });
 
+  it.each(["//evil.example", "/\\evil.example"])(
+    "never sends a signed-in user to %s",
+    async (next) => {
+      mockGet.mockReturnValue(next);
+      mockLogin.mockResolvedValue(makeLoginResponse());
+
+      renderLoginForm();
+      await fillAndSubmit("admin@cityschool.test", "secret123");
+
+      await waitFor(() => {
+        expect(mockReplace).toHaveBeenCalledWith("/dashboard");
+      });
+    },
+  );
+
+  it("drops a protocol-relative next on the way to the second factor", async () => {
+    mockGet.mockReturnValue("//evil.example");
+    mockLogin.mockResolvedValue({ mfa_required: true, mfa_token: "signed-challenge" });
+
+    renderLoginForm();
+    await fillAndSubmit("ops@schoolhub.test", "secret123");
+
+    await waitFor(() => {
+      expect(mockReplace).toHaveBeenCalledWith("/mfa/verify");
+    });
+  });
+
   it("ignores an off-site next param", async () => {
     mockGet.mockReturnValue("https://evil.example.com");
     mockLogin.mockResolvedValue(makeLoginResponse());

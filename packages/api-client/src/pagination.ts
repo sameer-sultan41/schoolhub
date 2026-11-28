@@ -90,6 +90,17 @@ export async function collectPages<TItem>(
 }
 
 /**
+ * RED stub (Task 9 fix round 1): reads page 1 only. The implementation lands after the RED run.
+ */
+export async function collectNumberedPages<TItem>(
+  client: ApiClient,
+  path: string,
+  options: PaginateOptions = {},
+): Promise<TItem[]> {
+  return (await fetchPage<TItem>(client, path, options)).items;
+}
+
+/**
  * Shape TanStack Query's `useInfiniteQuery` expects: the next `pageParam` is the
  * next cursor, or `undefined` when the list is exhausted.
  */

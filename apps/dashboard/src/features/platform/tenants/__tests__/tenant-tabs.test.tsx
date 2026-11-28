@@ -85,6 +85,7 @@ describe("the tenant's tabs", () => {
       planRecord({ id: "b1", code: "basic", name: "Basic" }),
     ]);
     platform.fetchAllFlags.mockResolvedValue([]);
+    platform.fetchTenant.mockResolvedValue(tenantRecord());
   });
 
   describe("Subscription", () => {
@@ -202,6 +203,8 @@ describe("the tenant's tabs", () => {
 
       const confirm = await screen.findByRole("alertdialog");
       expect(within(confirm).getByText(/staff: 42 in use, new limit 10/i)).toBeInTheDocument();
+      // `meta.over_usage` carries only the tenant id; the dialog names the school.
+      expect(await within(confirm).findByText("City School")).toBeInTheDocument();
       await user.click(within(confirm).getByRole("button", { name: "Save anyway" }));
 
       await waitFor(() => {

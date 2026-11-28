@@ -104,6 +104,23 @@ describe("MfaEnrollForm", () => {
     expect(auth.confirmMfa.mock.calls[0]?.[0]).toBe("123456");
   });
 
+  it("offers a new sign-in when the session ended while the QR code was up", async () => {
+    // `:confirm` goes through the auth proxy, which never refreshes: a 401 means sign in again.
+    auth.confirmMfa.mockRejectedValue(
+      new ApiError({ code: "unauthenticated", message: "x", status: 401, url: "/mfa:confirm" }),
+    );
+    renderWithProviders(<MfaEnrollForm />);
+    const user = await startAndScan();
+
+    await user.type(screen.getByLabelText(/authentication code/i), "123456");
+    await user.click(screen.getByRole("button", { name: "Turn on two-step sign-in" }));
+
+    expect(await screen.findByRole("link", { name: "Sign in again" })).toHaveAttribute(
+      "href",
+      "/login",
+    );
+  });
+
   it("offers a new sign-in when the session has ended", async () => {
     auth.enrollMfa.mockRejectedValue(
       new ApiError({ code: "unauthenticated", message: "x", status: 401, url: "/auth/mfa:enroll" }),

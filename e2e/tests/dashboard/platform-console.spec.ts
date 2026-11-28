@@ -106,7 +106,12 @@ test.describe("platform console", () => {
     // A school owner holds tenant-scope `platform.*` keys (files, jobs, notifications); none of
     // them is a console key.
     const owner = buildUser({
-      permissions: ["platform.file.view", "platform.job.view", "platform.notification.view"],
+      permissions: [
+        "students.student.view",
+        "platform.file.view",
+        "platform.job.view",
+        "platform.notification.view",
+      ],
     });
     mockApi.use(authModule({ user: owner, signedOut: true }), dashboardHomeModule());
 
@@ -117,6 +122,8 @@ test.describe("platform console", () => {
     });
 
     await expect(page).toHaveURL("/dashboard");
+    // The sidebar has rendered the owner's own entries, so a missing console entry is real.
+    await expect(page.getByRole("link", { name: "Students", exact: true })).toBeVisible();
     await expect(page.getByRole("link", { name: "Tenants" })).toHaveCount(0);
   });
 });
