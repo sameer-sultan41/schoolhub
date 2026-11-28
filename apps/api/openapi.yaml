@@ -9897,7 +9897,9 @@ paths:
         '409':
           description: 'invalid_transition: the subscription''s status does not allow
             this move; subscription_exists: the school already has a live subscription;
-            toggle_refused: the plan would switch off a module the school still needs.'
+            toggle_refused: the plan would switch off a module the school still needs;
+            limit_below_usage: a paid sign-up onto a plan whose limits are below the
+            school''s usage, without acknowledge_over_usage.'
         '422':
           description: No active plan has this code.
   /api/v1/platform/tenants/{tenant_pk}/subscription:change-plan:
@@ -30893,6 +30895,11 @@ components:
           type: string
           format: date-time
           description: After the start.
+        acknowledge_over_usage:
+          type: boolean
+          default: false
+          description: A paid sign-up onto a plan whose limits are below the school's
+            latest usage snapshot goes ahead anyway; without it that is a 409 limit_below_usage.
       required:
       - current_period_end
       - current_period_start
