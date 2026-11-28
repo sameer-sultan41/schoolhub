@@ -268,6 +268,14 @@ either this file or `project-status.md`.
       the owners' notice.
     - **No limit on how many grants an operator holds at once** across different users, and no
       alert on `platform.impersonation.*` events (SEC-19 lists impersonation grants).
+    - **Dashboard (Task 11):** the console has no list of an operator's open grants and no
+      Release button (`DELETE /platform/impersonation-grants/{id}` is unused); the operator ends
+      a session from its banner, or it expires. The duration choices (15, 30, 60 minutes) are
+      fixed in `platform-constant.ts`: if `PLATFORM_IMPERSONATION_MAX_MINUTES` is set below 60,
+      the longest is refused 422 rather than hidden, since the API does not publish its maximum.
+      The proxy's session marker is one cookie per host, so ending an impersonated tab also
+      clears it for a normal session open in another tab of the same school's host; that tab
+      then goes to sign-in on its next full navigation.
 
 - **AI gateway and AI-FEE-02 follow-ups** (`feat/ai-gateway`, plan
   `docs/superpowers/plans/2026-11-07-ai-gateway.md`, [ADR-0035](decisions/0035-ai-gateway-shape.md)).

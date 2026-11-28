@@ -60,7 +60,7 @@ Every operator signs in with password **and** TOTP ([auth-and-rbac §1](../02-ar
 6. **Onboarding wizard** — guided tenant setup: school profile → campuses → academic session → classes/sections → fee structures → staff invites → student import; resumable, with progress tracking.
 7. **Data migration / legacy import** — Excel/CSV import pipelines (students, guardians, staff, fee balances, marks history) with mapping templates, dry-run validation, error reports, and rollback of a failed batch.
 8. **Platform-level reporting** — aggregates only: tenant counts by state, MRR/ARR, usage/adoption per module, churn, support-load; never row-level school data. *Built:* tenant overview, revenue and usage (§7.9, §13); support-load is deferred.
-9. **Impersonation with audit** — elevation grant (≤ 1 h, reason required, banner shown); every action tagged `impersonated_by` in `audit_logs` (RBAC §1). *Built (API):* grants, the one-time handoff, the access-only token re-checked on every request, release and expiry (§7.3, [ADR-0037](../decisions/0037-impersonation-grants.md)); the dashboard's handoff page and banner are Task 11 of PR E.
+9. **Impersonation with audit** — elevation grant (≤ 1 h, reason required, banner shown); every action tagged `impersonated_by` in `audit_logs` (RBAC §1). *Built (API):* grants, the one-time handoff, the access-only token re-checked on every request, release and expiry (§7.3, [ADR-0037](../decisions/0037-impersonation-grants.md)). *Built (dashboard):* the console's "Impersonate user" dialog, the `/impersonate` handoff page and the session banner (§7.3, §20).
 
 ## 6. Sub-features
 
@@ -112,6 +112,14 @@ Support agent requests elevation (tenant, target user, reason) → grant issued 
 - **Every request** re-checks the grant (unreleased, unexpired, for this user and operator, school operational) and its holder (active, platform, MFA on, still holding `platform.tenant.impersonate`); otherwise 401 `impersonation_ended`. The target's permissions apply. `/auth/me` adds `impersonation: {by_name, expires_at}`. Password and MFA changes are 403 `impersonation_forbidden`; the console 404s the token.
 - **The end.** `POST /auth/impersonation:end`, logout, or `DELETE /platform/impersonation-grants/{id}` by the holder (`released`) or a `platform_super_admin` (`revoked`; anyone else gets 404); the `close_expired_impersonations` sweep (every five minutes, `bulk`) records `expired`.
 - **Audit and notice.** Security events `platform.impersonation.granted`, `.exchanged`, `.exchange_refused`, `.released`, `.revoked`, `.superseded` and `.expired`, attributed to the school. `platform.impersonation` goes in-app to the school's owners when a grant starts and when it ends (not when superseded).
+
+*As built (dashboard):*
+
+- **Starting.** A school's console page offers **Impersonate user** to an operator holding `platform.tenant.impersonate`, for a school in trial, active or past due. The dialog picks the user from `GET .../users` (a search on `q` and a role filter), takes a reason and a duration (15, 30 or 60 minutes; 30 by default), and calls `:impersonate`. The answer's `handoff_url` is shown as a link the operator follows into a new tab (`target="_blank"`, `rel="noopener noreferrer"`): a tab opened by script after the request would meet the popup blocker. The link, code and all, lives only in the dialog's state and is dropped when it closes.
+- **The handoff page.** `/impersonate` on the school's host is a link path in `proxy.ts`: public, and never redirected, so the fragment is not carried elsewhere. It reads `code` from the fragment once, clears the fragment with `replaceState`, and exchanges it. Before the exchange the tab's previous access token is dropped, and after it the query cache is cleared, so nothing of another session is mixed in. The token goes to the in-memory store as for any session; the proxy's session marker gets `max-age` equal to `expires_in`. An unusable code says to start again from the console. The code is never logged, stored or put in a query key.
+- **The banner.** While the session's token has `impersonation` in its `amr`, the staff and portal shells show a strip that cannot be dismissed: whom the operator acts as, the operator (`/auth/me`'s `impersonation.by_name`), the minutes left, and **End session**, which calls `:end` and opens `/impersonate?ended=1`. Signing out from the menu does the same.
+- **Ending.** An impersonated session never refreshes: it has no refresh token, and a refresh cookie on that host belongs to someone else. Any `impersonation_ended`, a 401 or a 403 from any request, or the grant's `expires_at` passing, drops the session and opens the ended page. A reload drops the in-memory token and ends the tab too: a per-tab `sessionStorage` flag (a flag, never the token) makes that tab's next 401 land on the ended page instead of refreshing. The operator starts again from the console, and the new grant supersedes the old one.
+- **Refused screens.** The password form and the second-factor enrolment show "Not available in a support session" instead of their form, matching the API's 403 `impersonation_forbidden`.
 
 ### 7.4 Tenant lifecycle, as built
 
@@ -411,4 +419,12 @@ Conventions per [`api-architecture.md`](../02-architecture/api-architecture.md).
 - **This app:** `hooks.py` registers the checker and the release; `tasks.close_expired_impersonations` (`bulk`, every five minutes); the `platform.impersonation` trigger; `snapshot_tenant` fills `impersonations_30d`.
 - **Tests:** `apps/platform_admin/tests/test_impersonation.py` and `tests/test_celery_routing.py`.
 
-**Not yet built:** the dashboard side of impersonation (PR E, Task 11); the onboarding wizard (PR H). Deferred items are in [`deferred-work.md`](../deferred-work.md).
+**Built (PR E, Task 11 — impersonation, dashboard):**
+
+- **Console:** `features/platform/impersonation/` (`impersonate-user-action.tsx` in the school page's extra-actions slot, `impersonate-user-dialog.tsx`, `tenant-user-field.tsx`); `Services.platform.fetchTenantUsers` and `impersonateUser`; the `platform.tenant.impersonate` key in `platform-permissions.ts`.
+- **Handoff:** `app/(auth)/impersonate/page.tsx` and `features/auth/impersonation-handoff.tsx`; `Paths.IMPERSONATE` in `proxy.ts`'s link paths; `Services.auth.exchangeImpersonationCode`, `endImpersonation` and `forgetImpersonation`.
+- **Session:** `lib/auth.ts` (`isImpersonationToken`, `isImpersonating`, `startImpersonatedSession`, `endImpersonatedSession`; no refresh while impersonating; the 401 handler told whether the session was impersonated), `hooks/use-is-impersonating.ts`, `useSignOut` and `providers.tsx` landing on the ended page.
+- **Banner and refusals:** `components/impersonation-banner.tsx` in `Shell` and `PortalShell`; `components/impersonation-forbidden-notice.tsx` in `ChangePasswordForm` and `MfaEnrollForm`.
+- **Tests:** Jest for the dialog (`features/platform/impersonation/__tests__/`), the handoff page, the banner, the session in `lib/__tests__/auth.test.ts`, the service calls, the proxy, the providers' handler, sign-out and both refused forms. The mocked e2e `e2e/tests/dashboard/impersonation.spec.ts` runs console → dialog → handoff on the school's host → banner → End session. That a released grant is refused before its `exp` stays the API's own test.
+
+**Not yet built:** the onboarding wizard (PR H). Deferred items are in [`deferred-work.md`](../deferred-work.md).
