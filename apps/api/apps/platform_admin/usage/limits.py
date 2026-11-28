@@ -16,6 +16,7 @@ from decimal import Decimal
 
 from apps.platform_admin.models import TenantUsageSnapshot
 from core.api.exceptions import CodedAPIException
+from core.tenancy.models import Tenant
 from core.tenancy.quotas import bytes_to_gb
 
 #: The quota metrics a snapshot counts, in `QUOTA_METRICS` order.
@@ -59,28 +60,44 @@ def latest_snapshots(tenant_ids: Iterable[uuid.UUID]) -> list[TenantUsageSnapsho
 def breaches(before: Limits, after: Limits, snapshots: Iterable[TenantUsageSnapshot]) -> list[dict]:
     """Every (school, metric) whose limit goes down and ends below the school's usage.
 
-    A limit that stays or rises is never a breach, so an edit that leaves an already-exceeded
-    limit alone needs no acknowledgement. ``None`` is unlimited.
+    Each entry names its school (``tenant_name``, ``slug``). A limit that stays or rises is
+    never a breach, so an edit that leaves an already-exceeded limit alone needs no
+    acknowledgement. ``None`` is unlimited.
     """
     lowered: dict[str, int] = {}
     for metric in COUNTED_METRICS:
         new, old = after.get(metric), before.get(metric)
         if new is not None and (old is None or new < old):
             lowered[metric] = new
-    found = []
+    over: list[tuple[uuid.UUID, str, int, int | Decimal]] = []
     for snapshot in snapshots:
         used = snapshot_usage(snapshot)
-        for metric, limit in lowered.items():
-            if used[metric] > limit:
-                found.append(
-                    {
-                        "tenant_id": str(snapshot.tenant_id),
-                        "metric": metric,
-                        "limit": limit,
-                        "usage": _json_number(used[metric]),
-                    }
-                )
-    return found
+        over.extend(
+            (snapshot.tenant_id, metric, limit, used[metric])
+            for metric, limit in lowered.items()
+            if used[metric] > limit
+        )
+    if not over:
+        return []
+    # Each entry names its school, so a client lists them without a request per school. One
+    # query for every school: `tenants` is a platform table, readable with no school bound.
+    names = {
+        row["pk"]: row
+        for row in Tenant.objects.filter(pk__in={tenant_id for tenant_id, *_ in over}).values(
+            "pk", "name", "slug"
+        )
+    }
+    return [
+        {
+            "tenant_id": str(tenant_id),
+            "tenant_name": names.get(tenant_id, {}).get("name", ""),
+            "slug": names.get(tenant_id, {}).get("slug", ""),
+            "metric": metric,
+            "limit": limit,
+            "usage": _json_number(usage),
+        }
+        for tenant_id, metric, limit, usage in over
+    ]
 
 
 def refuse_below_usage(

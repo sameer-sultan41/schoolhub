@@ -5320,7 +5320,8 @@
       "title": "Lower limits below current usage?",
       "description": "These schools already use more than the new limits. They keep what they have, but can't add more until they are under the limit.",
       "confirm": "Save anyway",
-      "breach": "{metric}: {usage} in use, new limit {limit}"
+      "breach": "{metric}: {usage} in use, new limit {limit}",
+      "more": "and {count, plural, one {# more school} other {# more schools}}"
     },
     "subscription": {
       "loadError": "The subscription couldn't be loaded.",
