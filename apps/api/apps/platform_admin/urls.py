@@ -11,6 +11,7 @@ urlpatterns = [
     path("", include("apps.platform_admin.billing.urls")),
     path("", include("apps.platform_admin.export.urls")),
     path("", include("apps.platform_admin.flags.urls")),
+    path("", include("apps.platform_admin.impersonation.urls")),
     path("", include("apps.platform_admin.plans.urls")),
     path("", include("apps.platform_admin.reports.urls")),
     path("", include("apps.platform_admin.subscriptions.urls")),

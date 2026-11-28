@@ -129,7 +129,8 @@ class GrantTests(ImpersonationTestCase):
 
     def test_grant_is_audited_and_the_owners_are_told(self) -> None:
         owner = tenant_user(self.tenant, "owner@school.test")
-        UserRole.objects.create(user=owner, role=Role.objects.get(tenant=None, slug="school_owner"))
+        owner_role = Role.objects.get(tenant=None, slug="school_owner")
+        UserRole.objects.create(user=owner, role=owner_role, tenant=self.tenant)
         response = self.start()
         grant_id = response.json()["data"]["grant_id"]
 

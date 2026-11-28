@@ -43,6 +43,7 @@ TENANT_REINSTATED = "platform.tenant-reinstated"
 TRIAL_EXPIRING = "platform.trial-expiring"
 PAYMENT_FAILED = "platform.payment-failed"
 QUOTA_THRESHOLD = "platform.quota-threshold"
+IMPERSONATION = "platform.impersonation"
 
 _VARIABLES = {"school.name"}
 
@@ -104,6 +105,38 @@ for _code, _description, _subject, _body, _variables in (
         templates.register(
             _code, channel=_channel, subject=_subject, body=_body, variables=_variables
         )
+
+
+# In-app only (§12): a support session starting or ending is a notice for the owners' inbox, not
+# mail. One code for both, the event word says which.
+_IMPERSONATION_VARIABLES = {
+    *_VARIABLES,
+    "impersonation.event",
+    "impersonation.operator",
+    "impersonation.target",
+    "impersonation.reason",
+    "impersonation.expires_at",
+}
+catalog.register(
+    IMPERSONATION,
+    template_code=IMPERSONATION,
+    category=NotificationCategory.GENERAL,
+    priority=NotificationPriority.HIGH,
+    variables=_IMPERSONATION_VARIABLES,
+    description="SchoolHub support started or ended a session signed in as a school user.",
+)
+templates.register(
+    IMPERSONATION,
+    channel=NotificationChannel.IN_APP,
+    subject="{{ school.name }}: a SchoolHub support session {{ impersonation.event }}",
+    body=(
+        "SchoolHub support ({{ impersonation.operator }}) {{ impersonation.event }} a session "
+        "signed in as {{ impersonation.target }}. Reason: {{ impersonation.reason }}. It ends "
+        "by {{ impersonation.expires_at }} at the latest, and every change made in it is "
+        "recorded in the audit log under both names."
+    ),
+    variables=_IMPERSONATION_VARIABLES,
+)
 
 
 def school_owners(tenant: Tenant) -> list[User]:

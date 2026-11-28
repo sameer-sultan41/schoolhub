@@ -1,3 +1,5 @@
+from importlib import import_module
+
 from django.apps import AppConfig
 from django.db.models.signals import post_migrate
 
@@ -17,6 +19,10 @@ class RbacConfig(AppConfig):
         from core.rbac.sync import sync_rbac_on_migrate
 
         load_module_permissions()
+
+        # The OpenAPI scheme of the API's authentication class (drf-spectacular finds
+        # extensions by import; `core.rbac.authentication` cannot import it, see there).
+        import_module("core.rbac.schema")
 
         # TOTP secrets are encrypted with the integration keys; `users` has no RLS, so they
         # rotate once per run, not per tenant.

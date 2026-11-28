@@ -55,6 +55,8 @@ CLIENT_KNOWN_SERVER_CODES = {
     "toggle_refused",
     "limit_below_usage",
     "quota_exceeded",
+    "impersonation_ended",
+    "impersonation_forbidden",
 }
 
 
@@ -178,6 +180,7 @@ class ErrorCodeContractTests(APITestCase):
             TenantNotFound,
             TenantSuspended,
         )
+        from core.rbac.impersonation import ImpersonationEnded, ImpersonationForbidden
         from core.rbac.mfa import (
             InvalidMfaCode,
             MfaAlreadyEnabled,
@@ -221,6 +224,10 @@ class ErrorCodeContractTests(APITestCase):
             LimitBelowUsage.default_code,
             # A create past a plan's students, staff or storage limit.
             QuotaExceeded.default_code,
+            # Impersonation (ADR-0037): a session whose grant ended, and an account change
+            # refused under impersonation.
+            ImpersonationEnded.default_code,
+            ImpersonationForbidden.default_code,
         }
         self.assertEqual(
             emitted - CLIENT_KNOWN_SERVER_CODES,

@@ -37,7 +37,7 @@ from django.conf import settings
 from django.http import HttpResponse
 from drf_spectacular.utils import PolymorphicProxySerializer, extend_schema
 from rest_framework import status
-from rest_framework.exceptions import APIException, AuthenticationFailed, PermissionDenied
+from rest_framework.exceptions import AuthenticationFailed, PermissionDenied
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -45,14 +45,17 @@ from rest_framework_simplejwt.exceptions import InvalidToken, TokenError
 from rest_framework_simplejwt.serializers import TokenRefreshSerializer
 from rest_framework_simplejwt.tokens import RefreshToken
 
+from core.api.exceptions import refusal_response
 from core.api.throttling import AuthEndpointThrottle
 from core.audit.services import record_security_event
 from core.rbac import mfa
+from core.rbac.impersonation import RefuseImpersonation, end_impersonation, is_impersonated
 from core.rbac.models import User
 from core.rbac.permissions import FIRST_FACTOR_AMR, OTP_AMR, IsPlatformUser
 from core.rbac.serializers import (
     ChangePasswordSerializer,
     LoginSerializer,
+    MeSerializer,
     MfaChallengeResponseSerializer,
     MfaConfirmResponseSerializer,
     MfaConfirmSerializer,
@@ -112,16 +115,6 @@ def _error_response(request, code: str, message: str, http_status: int) -> Respo
         },
         status=http_status,
     )
-
-
-def _refusal(request, exc: APIException) -> Response:
-    response = _error_response(request, str(exc.default_code), str(exc.detail), exc.status_code)
-    # As DRF's handler does for a throttle: a timed MFA lock says when to retry (RFC 9110
-    # §10.2.3); the operator-only lock has no wait.
-    wait = getattr(exc, "wait", None)
-    if wait:
-        response["Retry-After"] = str(wait)
-    return response
 
 
 def _signed_in_response(
@@ -224,7 +217,7 @@ class MfaVerifyView(APIView):
             challenge = mfa.redeem_challenge(data["mfa_token"])
         except mfa.MfaChallengeInvalid as exc:
             record_security_event(request, "auth.mfa.failed", reason="challenge")
-            return _refusal(request, exc)
+            return refusal_response(request, exc)
 
         user = challenge.user
         method = "totp" if "code" in data else "recovery_code"
@@ -235,10 +228,10 @@ class MfaVerifyView(APIView):
                 passed = mfa.use_recovery_code(user, data["recovery_code"])
         except mfa.MfaLockedOut as exc:
             record_security_event(request, "auth.mfa.locked", user_id=str(user.pk), method=method)
-            return _refusal(request, exc)
+            return refusal_response(request, exc)
         if not passed:
             record_security_event(request, "auth.mfa.failed", user_id=str(user.pk), method=method)
-            return _refusal(request, mfa.InvalidMfaCode())
+            return refusal_response(request, mfa.InvalidMfaCode())
 
         mfa.close_challenge(challenge)
         record_security_event(request, "auth.login.succeeded", user_id=str(user.pk), method=method)
@@ -251,10 +244,11 @@ class MfaEnrollView(APIView):
     Platform users only in v1 (a tenant principal gets 404). Refused 409
     ``mfa_already_enabled`` once MFA is on, so a password-only token can never replace an
     enrolled factor (ruling A2); an operator who lost theirs is reset with
-    ``create_platform_admin --reset-mfa``.
+    ``create_platform_admin --reset-mfa``. Refused 403 ``impersonation_forbidden`` under
+    impersonation (ADR-0037).
     """
 
-    permission_classes = [IsAuthenticated, IsPlatformUser]
+    permission_classes = [IsAuthenticated, RefuseImpersonation, IsPlatformUser]
     throttle_classes = [AuthEndpointThrottle]
 
     @extend_schema(request=None, responses={200: MfaEnrollResponseSerializer})
@@ -271,7 +265,7 @@ class MfaConfirmView(APIView):
     ``amr`` carries ``"otp"``, so the console opens without signing in again.
     """
 
-    permission_classes = [IsAuthenticated, IsPlatformUser]
+    permission_classes = [IsAuthenticated, RefuseImpersonation, IsPlatformUser]
     throttle_classes = [AuthEndpointThrottle]
 
     @extend_schema(request=MfaConfirmSerializer, responses={200: MfaConfirmResponseSerializer})
@@ -283,10 +277,10 @@ class MfaConfirmView(APIView):
             recovery_codes = mfa.confirm_enrolment(request.user, serializer.validated_data["code"])
         except mfa.MfaLockedOut as exc:
             record_security_event(request, "auth.mfa.locked", method="totp")
-            return _refusal(request, exc)
+            return refusal_response(request, exc)
         if recovery_codes is None:
             record_security_event(request, "auth.mfa.failed", method="totp")
-            return _refusal(request, mfa.InvalidMfaCode())
+            return refusal_response(request, mfa.InvalidMfaCode())
 
         record_security_event(request, "auth.mfa.enabled")
         return _second_factor_response(request.user, {"recovery_codes": recovery_codes})
@@ -301,13 +295,13 @@ class MfaDisableView(APIView):
     (docs/deferred-work.md), which is when this route gains a path that succeeds.
     """
 
-    permission_classes = [IsAuthenticated, IsPlatformUser]
+    permission_classes = [IsAuthenticated, RefuseImpersonation, IsPlatformUser]
     throttle_classes = [AuthEndpointThrottle]
 
     @extend_schema(request=None, responses={403: None})
     def post(self, request):
         record_security_event(request, "auth.mfa.disable_refused")
-        return _refusal(
+        return refusal_response(
             request,
             PermissionDenied(
                 "A platform account cannot turn off two-factor authentication. "
@@ -356,10 +350,18 @@ class RefreshView(APIView):
 
 
 class LogoutView(APIView):
+    """Ends the session: blacklists the refresh cookie's token, or, under impersonation,
+    releases the grant and leaves the cookie alone (the operator's tab holds none of its own).
+    """
+
     permission_classes = [IsAuthenticated]
 
     @extend_schema(request=None, responses={204: None})
     def post(self, request):
+        if is_impersonated(request):
+            end_impersonation(request)
+            return Response(status=status.HTTP_204_NO_CONTENT)
+
         raw_token = request.COOKIES.get(REFRESH_COOKIE_NAME)
         if raw_token:
             # An already-invalid token means the session is gone, which is the
@@ -373,17 +375,20 @@ class LogoutView(APIView):
 
 
 class MeView(APIView):
-    """The authenticated principal, with effective permissions for UI gating."""
+    """The authenticated principal, with effective permissions for UI gating, and the
+    impersonation the session runs under (`impersonation`, null for a normal session)."""
 
     permission_classes = [IsAuthenticated]
 
-    @extend_schema(responses={200: UserSerializer})
+    @extend_schema(responses={200: MeSerializer})
     def get(self, request):
-        return Response({"data": UserSerializer(request.user).data})
+        return Response({"data": MeSerializer(request.user, context={"request": request}).data})
 
 
 class ChangePasswordView(APIView):
-    permission_classes = [IsAuthenticated]
+    """Refused 403 ``impersonation_forbidden`` under impersonation (ADR-0037)."""
+
+    permission_classes = [IsAuthenticated, RefuseImpersonation]
     throttle_classes = [AuthEndpointThrottle]
 
     @extend_schema(request=ChangePasswordSerializer, responses={204: None})

@@ -186,6 +186,11 @@ export const API_ERROR_CODES = [
   // A create that would take a school past its plan's students, staff or storage limit (409;
   // apps/api/core/tenancy/quotas.py, `meta` is `{metric, limit, usage}`).
   "quota_exceeded",
+  // Impersonation (apps/api/core/rbac/impersonation.py, ADR-0037): the session's grant was
+  // released, expired or revoked, or its holder lost the right to it (401, never refreshed); and
+  // a password or second-factor change refused under impersonation (403).
+  "impersonation_ended",
+  "impersonation_forbidden",
   // Synthesised by this client when the request never produced an envelope.
   "network_error",
   "server_error",

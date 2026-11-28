@@ -152,6 +152,7 @@ def record_security_event(request, action: str, *, tenant=None, **context) -> No
             AuditLog.objects.create(
                 tenant=tenant if tenant is not None else getattr(request, "tenant", None),
                 actor=user if user and getattr(user, "is_authenticated", False) else None,
+                impersonated_by=getattr(request, "impersonated_by", None),
                 action=action,
                 resource_type="security.event",
                 after=_json_safe(_redact(context)) or None,

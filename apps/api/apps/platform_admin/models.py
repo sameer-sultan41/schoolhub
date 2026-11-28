@@ -228,3 +228,74 @@ class TenantUsageSnapshot(models.Model):
 
     def delete(self, *args, **kwargs):
         raise RuntimeError("TenantUsageSnapshot rows cannot be deleted.")
+
+
+class ImpersonationEnd(models.TextChoices):
+    """Why a grant stopped being live (ADR-0037)."""
+
+    # The holder ended it: `:end`, logout under impersonation, or the console's DELETE.
+    RELEASED = "released", "Released"
+    # A `platform_super_admin` ended another operator's grant from the console.
+    REVOKED = "revoked", "Revoked"
+    # The same holder took a new grant for the same person.
+    SUPERSEDED = "superseded", "Superseded"
+    # Its `expires_at` passed; the sweep records it (`close_expired_impersonations`).
+    EXPIRED = "expired", "Expired"
+
+
+class ImpersonationGrant(TimestampedModel):
+    """One operator's time-boxed permission to act as one school user (§7.3, ADR-0037).
+
+    Platform scope (no RLS): the authenticator reads it on every impersonated request, before
+    any school is bound. It names the school, so the console and the snapshot count it per
+    school without reading the school's own tables.
+
+    Live while ``released_at`` is null and ``expires_at`` is in the future. The handoff code is
+    held only as its SHA-256 (``handoff_code_hash``), is spent once (``handoff_used_at``, set
+    by a conditional update) and expires at ``handoff_expires_at``, never after the grant.
+    """
+
+    tenant = models.ForeignKey("tenancy.Tenant", on_delete=models.PROTECT, related_name="+")
+    target_user = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="+"
+    )
+    granted_to = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        related_name="+",
+        help_text="The platform operator who holds the grant.",
+    )
+    reason = models.TextField()
+    expires_at = models.DateTimeField()
+    released_at = models.DateTimeField(null=True, blank=True)
+    end_reason = models.CharField(
+        max_length=20, choices=ImpersonationEnd.choices, blank=True, default=""
+    )
+    handoff_code_hash = models.CharField(max_length=64, unique=True)
+    handoff_expires_at = models.DateTimeField()
+    handoff_used_at = models.DateTimeField(null=True, blank=True)
+
+    objects = models.Manager()
+
+    class Meta:
+        db_table = "impersonation_grants"
+        indexes = [
+            models.Index(fields=["tenant", "-created_at"], name="impersonation_grants_tenant"),
+            models.Index(
+                fields=["expires_at"],
+                condition=Q(released_at__isnull=True),
+                name="impersonation_grants_open",
+            ),
+        ]
+        constraints = [
+            # A new grant releases the holder's previous one for the same person (§7.3), so
+            # at most one is open; the service locks the holder's row, and this is the backstop.
+            models.UniqueConstraint(
+                fields=["granted_to", "target_user"],
+                condition=Q(released_at__isnull=True),
+                name="impersonation_grants_one_open_per_pair",
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.granted_to_id} as {self.target_user_id} until {self.expires_at:%H:%M}"

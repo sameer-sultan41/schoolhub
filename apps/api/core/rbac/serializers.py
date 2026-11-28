@@ -6,6 +6,7 @@ from collections.abc import Sequence
 
 from django.contrib.auth import authenticate
 from django.utils.translation import gettext_lazy as _
+from drf_spectacular.utils import extend_schema_field
 from rest_framework import serializers
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 from rest_framework_simplejwt.tokens import RefreshToken
@@ -157,6 +158,35 @@ class UserSerializer(serializers.ModelSerializer):
         return list(
             obj.user_roles.filter(deleted_at__isnull=True).values_list("role__slug", flat=True)
         )
+
+
+class ImpersonationSummarySerializer(serializers.Serializer):
+    """Who is acting as this user, and until when; the dashboard's banner shows it."""
+
+    by_name = serializers.CharField(source="operator_name")
+    expires_at = serializers.DateTimeField()
+
+
+class MeSerializer(UserSerializer):
+    """`/auth/me`: the user, plus the impersonation the session runs under (ADR-0037).
+
+    ``impersonation`` is null for a normal session. It is read from the request, which the
+    authenticator annotated after checking the grant, so it is never stale.
+    """
+
+    impersonation = serializers.SerializerMethodField()
+
+    class Meta(UserSerializer.Meta):
+        fields = (*UserSerializer.Meta.fields, "impersonation")
+        read_only_fields = fields
+
+    @extend_schema_field(ImpersonationSummarySerializer(allow_null=True))
+    def get_impersonation(self, obj) -> dict | None:
+        request = self.context.get("request")
+        live = getattr(request, "impersonation", None)
+        if live is None:
+            return None
+        return dict(ImpersonationSummarySerializer(live).data)
 
 
 class RefreshResponseSerializer(serializers.Serializer):

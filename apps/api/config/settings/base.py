@@ -240,8 +240,9 @@ THROTTLE_RATES: dict[str, str] = {
 }
 
 REST_FRAMEWORK = {
+    # SimpleJWT's class plus the impersonation-grant check on every request (ADR-0037).
     "DEFAULT_AUTHENTICATION_CLASSES": (
-        "rest_framework_simplejwt.authentication.JWTAuthentication",
+        "core.rbac.authentication.ImpersonationAwareJWTAuthentication",
     ),
     "DEFAULT_PERMISSION_CLASSES": ("rest_framework.permissions.IsAuthenticated",),
     "DEFAULT_RENDERER_CLASSES": ("core.api.renderers.EnvelopeJSONRenderer",),
@@ -517,6 +518,7 @@ CELERY_TASK_ROUTES = {
     "apps.platform_admin.tasks.dunning_sweep": {"queue": "bulk"},
     "apps.platform_admin.tasks.lapse_overrides": {"queue": "bulk"},
     "apps.platform_admin.tasks.snapshot_all": {"queue": "bulk"},
+    "apps.platform_admin.tasks.close_expired_impersonations": {"queue": "bulk"},
     # A whole school zipped to storage: the heaviest platform job, and nobody watches it.
     "apps.platform_admin.tasks.export_tenant": {"queue": "bulk"},
     "apps.platform_admin.tasks.send_trial_expiring_notice": {"queue": "transactional"},
@@ -630,6 +632,12 @@ CELERY_BEAT_SCHEDULE = {
     "platform-usage-snapshot": {
         "task": "apps.platform_admin.tasks.snapshot_all",
         "schedule": crontab(hour="2", minute="50"),
+    },
+    # Every five minutes: the authenticator refuses an expired grant's token by itself; this
+    # records the expiry and tells the school's owners (ADR-0037).
+    "platform-close-expired-impersonations": {
+        "task": "apps.platform_admin.tasks.close_expired_impersonations",
+        "schedule": crontab(minute="*/5"),
     },
 }
 

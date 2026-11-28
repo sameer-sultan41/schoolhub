@@ -127,6 +127,30 @@ class TenantSuspended(exceptions.APIException):
     default_code = "tenant_suspended"
 
 
+def refusal_response(request, exc: exceptions.APIException) -> Response:
+    """``exc`` as the error envelope, returned rather than raised.
+
+    Under ``ATOMIC_REQUESTS`` a raised exception rolls back the request's transaction, and with
+    it the security event just recorded; a refused sign-in or handoff must keep its audit row.
+    A timed lock's ``wait`` becomes ``Retry-After``, as DRF's handler does for a throttle.
+    """
+    response = Response(
+        {
+            "error": {
+                "code": str(exc.default_code),
+                "message": str(exc.detail),
+                "details": [],
+                "request_id": getattr(request, "request_id", None),
+            }
+        },
+        status=exc.status_code,
+    )
+    wait = getattr(exc, "wait", None)
+    if wait:
+        response["Retry-After"] = str(wait)
+    return response
+
+
 def _flatten_details(detail, prefix: str = "") -> list[dict[str, str]]:
     """Turn DRF's nested error structure into a flat, client-friendly list."""
     details: list[dict[str, str]] = []
