@@ -9446,8 +9446,12 @@ paths:
       - jwtAuth: []
       responses:
         '200':
-          description: 'JSON: {key, title, generated_at, sections: {name: [row]}};
-            CSV or XLSX: the sections as one table, as an attachment.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlatformReport'
+          description: JSON (the default); CSV or XLSX answer the sections as one
+            table with a leading `section` column, as an attachment.
         '404':
           description: An unknown report key.
   /api/v1/platform/tenants:
@@ -9742,8 +9746,52 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/PlatformJob'
+                $ref: '#/components/schemas/BackgroundJob'
           description: ''
+  /api/v1/platform/tenants/{tenant_pk}/jobs/{job_id}:download:
+    post:
+      operationId: platform_tenants_jobs_:download_create
+      description: |-
+        Binds the target school of a ``.../tenants/<tenant_pk>/...`` route for the whole request.
+
+        **One target tenant per platform request.** ``initial()`` loads the tenant named by the
+        ``tenant_pk`` URL kwarg (404 if there is none), binds it the way
+        `core.api.viewsets.TenantScopedViewSetMixin` binds the caller's own, and sets
+        ``request.tenant``, so `record_audit` attributes each row to it. Under
+        ``ATOMIC_REQUESTS`` the binding's ``SET LOCAL`` lasts the whole request: reads and writes
+        alike see that school's rows and no other's.
+
+        The tenant is loaded only after authentication and the permission checks have passed, so
+        an unknown id answers 401, 404 or 403 exactly as a known one does, and is no oracle.
+
+        List it before `PlatformViewSet`: ``class X(PlatformTenantNestedMixin, PlatformViewSet)``.
+      summary: A signed link to a finished export's archive (audited)
+      parameters:
+      - in: path
+        name: job_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      - in: path
+        name: tenant_pk
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - platform
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExportDownload'
+          description: ''
+        '409':
+          description: 'conflict: the job has not succeeded.'
   /api/v1/platform/tenants/{tenant_pk}/subscription:
     get:
       operationId: platform_tenants_subscription_retrieve
@@ -10057,8 +10105,13 @@ paths:
       - jwtAuth: []
       responses:
         '202':
-          description: '{''data'': {''job_id'': str, ''status'': ''queued''}}. An
-            export already queued or running is returned instead of starting another.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExportAccepted'
+          description: An export already queued or running is answered instead of
+            a new one; one in flight past PLATFORM_EXPORT_TIME_LIMIT_SECONDS is failed
+            and replaced.
   /api/v1/platform/tenants/{tenant_pk}:provision:
     post:
       operationId: platform_tenants_:provision_create
@@ -19629,6 +19682,31 @@ components:
         * `paid` - Paid
         * `rejected` - Rejected
         * `reversed` - Reversed
+    ExportAccepted:
+      type: object
+      properties:
+        job_id:
+          type: string
+          format: uuid
+          description: Poll .../tenants/{tenant_pk}/jobs/{job_id}.
+        status:
+          type: string
+          description: queued, or the status of the export in flight.
+      required:
+      - job_id
+      - status
+    ExportDownload:
+      type: object
+      properties:
+        download_url:
+          type: string
+          description: A signed link to the archive.
+        expires_in:
+          type: integer
+          description: Seconds the link stays valid.
+      required:
+      - download_url
+      - expires_in
     FeatureFlag:
       type: object
       properties:
@@ -27385,68 +27463,30 @@ components:
       - enabled_modules
       - name
       - price_amount
-    PlatformJob:
+    PlatformReport:
       type: object
       properties:
-        id:
+        key:
           type: string
-          format: uuid
-          readOnly: true
-        job_type:
+        title:
           type: string
-          readOnly: true
-          description: e.g. 'import.students', 'export.students', 'id-cards.generate'.
-        status:
-          allOf:
-          - $ref: '#/components/schemas/BackgroundJobStatusEnum'
-          readOnly: true
-        progress:
-          type: integer
-          readOnly: true
-        result:
-          readOnly: true
-          nullable: true
-          description: Result summary, e.g. result_file_id.
-        error:
-          type: string
-          readOnly: true
-          nullable: true
-        started_at:
+        generated_at:
           type: string
           format: date-time
-          readOnly: true
-          nullable: true
-        finished_at:
-          type: string
-          format: date-time
-          readOnly: true
-          nullable: true
-        created_at:
-          type: string
-          format: date-time
-          readOnly: true
-        updated_at:
-          type: string
-          format: date-time
-          readOnly: true
-        download_url:
-          type: string
-          nullable: true
-          readOnly: true
-          description: A short-lived signed link to the result file once the job succeeded;
-            poll again for a fresh one.
+        sections:
+          type: object
+          additionalProperties:
+            type: array
+            items:
+              type: object
+              additionalProperties: {}
+          description: Named tables; every row of a section has the same keys (platform-admin
+            §7.9).
       required:
-      - created_at
-      - download_url
-      - error
-      - finished_at
-      - id
-      - job_type
-      - progress
-      - result
-      - started_at
-      - status
-      - updated_at
+      - generated_at
+      - key
+      - sections
+      - title
     PortalChild:
       type: object
       properties:
