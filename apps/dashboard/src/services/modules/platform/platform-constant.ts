@@ -103,7 +103,7 @@ export const OPERATIONAL_STATUSES = [
 export const IMPERSONATION_DURATIONS = [15, 30, 60] as const;
 export const DEFAULT_IMPERSONATION_MINUTES = 30;
 
-/** The server's cap on an impersonation reason (`ImpersonateSerializer.reason`). */
+/** The server's cap on an impersonation reason (`ImpersonateRequestSerializer.reason`). */
 export const IMPERSONATION_REASON_MAX_LENGTH = 1000;
 
 /** How many matches the user picker shows: search narrows it. */
