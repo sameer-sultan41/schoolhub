@@ -78,6 +78,14 @@ override_resource {
 }
 
 override_resource {
+  target          = module.storage.aws_s3_bucket.uploads
+  override_during = plan
+  values = {
+    id = "schoolhub-staging-uploads"
+  }
+}
+
+override_resource {
   target          = module.cache.aws_secretsmanager_secret.auth_token
   override_during = plan
   values = {
