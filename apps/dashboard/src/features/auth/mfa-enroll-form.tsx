@@ -25,7 +25,9 @@ import {
   Label,
 } from "@schoolhub/ui";
 
+import { ImpersonationForbiddenNotice } from "@/components/impersonation-forbidden-notice";
 import { Paths } from "@/config/paths";
+import { useIsImpersonating } from "@/hooks/use-is-impersonating";
 import { resolveErrorMessage } from "@/lib/error-message";
 import { homePathFor } from "@/lib/home-path";
 import { ApiError, Services, type MfaEnrollResponse } from "@/services";
@@ -45,6 +47,11 @@ const QR_SIZE = 192;
  * wrong code is a 400 and the step stays; no refusal here signs the user out.
  */
 export function MfaEnrollForm() {
+  // Refused 403 `impersonation_forbidden` under impersonation (ADR-0037): say so, offer nothing.
+  return useIsImpersonating() ? <ImpersonationForbiddenNotice /> : <MfaEnrollSteps />;
+}
+
+function MfaEnrollSteps() {
   const t = useTranslations("auth.mfa.enroll");
   const tErrors = useTranslations("errors");
   const tCommon = useTranslations("common");

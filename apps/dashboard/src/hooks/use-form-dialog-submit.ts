@@ -26,6 +26,9 @@ export interface FormDialogSubmitOptions<TValues extends FieldValues, TResult> {
   /** Called on every failure, after it is shown: for a refusal the dialog answers with its own
    * next step (an acknowledgement, say). */
   onError?: (error: unknown, values: TValues) => void;
+  /** How long the settled mutation, result included, stays in the cache: 0 for a result that
+   * holds a secret (a single-use link), so it is gone once the dialog closes. */
+  gcTime?: number;
 }
 
 /**
@@ -41,6 +44,7 @@ export function useFormDialogSubmit<TValues extends FieldValues, TResult>({
   fallbackMessage,
   describeError,
   onError,
+  gcTime,
 }: FormDialogSubmitOptions<TValues, TResult>) {
   const tErrors = useTranslations("errors");
   const submitGuard = useSubmitGuard();
@@ -48,6 +52,7 @@ export function useFormDialogSubmit<TValues extends FieldValues, TResult>({
 
   const mutation = useMutation({
     mutationFn,
+    ...(gcTime === undefined ? {} : { gcTime }),
     onSuccess: (result, values) => {
       onSuccess(result, values);
     },

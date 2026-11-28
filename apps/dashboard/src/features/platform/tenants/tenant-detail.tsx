@@ -37,7 +37,7 @@ function isTenantTab(value: string | null): value is TenantTab {
 
 export interface TenantDetailProps {
   tenantId: string;
-  /** Extra header actions after the lifecycle ones: the slot Task 11's impersonation uses. */
+  /** Extra header actions after the lifecycle ones: the page puts "Impersonate user" here. */
   extraActions?: ReactNode;
 }
 

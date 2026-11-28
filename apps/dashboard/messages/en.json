@@ -200,6 +200,28 @@
         "savedConfirm": "I have saved these codes somewhere safe.",
         "continue": "Continue to the console"
       }
+    },
+    "impersonation": {
+      "metaTitle": "Support session",
+      "signingIn": "Opening the support session",
+      "invalidTitle": "This support link can't be used",
+      "invalidBody": "It works once, within two minutes of being created. Start a new session from the platform console.",
+      "failed": "The support session couldn't be opened.",
+      "endedTitle": "This support session has ended",
+      "endedBody": "The session was ended or ran out of time. Reloading this tab also ends it. Start a new session from the platform console, and close this tab.",
+      "banner": {
+        "label": "Support session",
+        "who": "Signed in as {name} by {operator}, for support. Every action is audited.",
+        "generic": "This is a support session. Every action is audited.",
+        "timeLeft": "{minutes} minutes left",
+        "lastMinute": "Less than a minute left",
+        "end": "End session",
+        "ending": "Ending the session"
+      },
+      "forbidden": {
+        "title": "Not available in a support session",
+        "body": "Only the account's owner can change its password or two-step sign-in."
+      }
     }
   },
   "dashboard": {
@@ -4842,7 +4864,9 @@
     "grace_expired": "This school's payment grace has run out. Record a payment before reinstating it.",
     "toggle_refused": "That feature can't be changed for this school right now.",
     "limit_below_usage": "A limit would drop below a school's current usage.",
-    "quota_exceeded": "Your school has reached its plan's limit. Ask your administrator about upgrading."
+    "quota_exceeded": "Your school has reached its plan's limit. Ask your administrator about upgrading.",
+    "impersonation_ended": "This support session has ended.",
+    "impersonation_forbidden": "This can't be done in a support session."
   },
   "portal": {
     "shell": {
@@ -5499,6 +5523,30 @@
         "tenantOverview": "Tenant overview",
         "revenue": "Revenue",
         "usage": "Usage and adoption"
+      }
+    },
+    "impersonation": {
+      "action": "Impersonate user",
+      "title": "Impersonate a user at {name}",
+      "description": "Opens the school's dashboard as one of its users, for a limited time. The school's owners are told, and every action is audited.",
+      "search": "Search users",
+      "searchPlaceholder": "Name, email or username",
+      "role": "Role",
+      "allRoles": "All roles",
+      "user": "User",
+      "userPlaceholder": "Choose a user",
+      "loadingUsers": "Loading users",
+      "usersLoadError": "The school's users couldn't be loaded.",
+      "userOption": "{name} ({email})",
+      "reasonHint": "Why you need access. Kept in the audit log and shown to the school's owners.",
+      "duration": "Duration",
+      "minutes": "{count} minutes",
+      "submit": "Start session",
+      "submitting": "Starting session",
+      "started": {
+        "title": "Support session ready",
+        "body": "The link works once, within two minutes. The session ends at {time}.",
+        "open": "Open {school}'s dashboard"
       }
     }
   }

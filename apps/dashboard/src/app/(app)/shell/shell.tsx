@@ -3,6 +3,7 @@
 import { useEffect, type ReactNode } from "react";
 
 import { Footer } from "@/app/(app)/shell/footer";
+import { ImpersonationBanner } from "@/components/impersonation-banner";
 import { Header } from "@/app/(app)/shell/header";
 import { useSettings } from "@/providers/settings-provider";
 import { Sidebar } from "@/app/(app)/shell/sidebar";
@@ -80,6 +81,7 @@ export function Shell({ children }: { children: ReactNode }) {
           {children}
         </main>
         <Footer />
+        <ImpersonationBanner />
       </div>
     </>
   );

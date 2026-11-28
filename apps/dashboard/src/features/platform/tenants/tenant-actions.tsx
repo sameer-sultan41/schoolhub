@@ -60,7 +60,7 @@ function canStillRestore(tenant: TenantRecord, now: number): boolean {
 /**
  * A school's lifecycle actions, each shown only where the lifecycle allows it from the school's
  * status and the viewer holds its exact key; UX only, the API enforces both. `children` is a slot
- * after the built-in actions (Task 11 puts impersonation there). Each dialog is mounted only while
+ * after the built-in actions (the page puts impersonation there). Each dialog is mounted only while
  * open, so it starts fresh with a new `Idempotency-Key`.
  */
 export function TenantActions({

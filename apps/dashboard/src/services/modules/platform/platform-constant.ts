@@ -10,6 +10,7 @@ export const TENANT_DETAIL_RESOURCE = "tenant";
 export const PLAN_LIST_RESOURCE = "plans";
 export const FLAG_LIST_RESOURCE = "feature-flags";
 export const REPORT_RESOURCE = "report";
+export const TENANT_USERS_RESOURCE = "tenant-users";
 
 /** Mirrors `TenantStatusEnum` (the generated contract), in lifecycle order. */
 export const TENANT_STATUSES = [
@@ -88,3 +89,22 @@ export const PLATFORM_ACTIONS_COLUMN_ID = "actions";
  * running (the job keeps going; the operator can check again). */
 export const EXPORT_POLL_INTERVAL_MS = 2000;
 export const EXPORT_POLL_TIMEOUT_MS = 120_000;
+
+/** The statuses a school can be impersonated in: `Tenant.is_operational`
+ * (`apps/api/core/tenancy/models.py`). The server refuses any other with 409 `conflict`. */
+export const OPERATIONAL_STATUSES = [
+  "trial",
+  "active",
+  "past_due",
+] as const satisfies readonly TenantStatus[];
+
+/** The session lengths the console offers, in minutes. Each is within 1 to
+ * `PLATFORM_IMPERSONATION_MAX_MINUTES` (60 by default); the server refuses any other with 422. */
+export const IMPERSONATION_DURATIONS = [15, 30, 60] as const;
+export const DEFAULT_IMPERSONATION_MINUTES = 30;
+
+/** The server's cap on an impersonation reason (`ImpersonateSerializer.reason`). */
+export const IMPERSONATION_REASON_MAX_LENGTH = 1000;
+
+/** How many matches the user picker shows: search narrows it. */
+export const TENANT_USER_PICKER_PAGE_SIZE = 50;

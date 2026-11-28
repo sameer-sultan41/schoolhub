@@ -7,6 +7,7 @@ import type {
   PlatformPageQuery,
   TenantPageQuery,
   TenantStatus,
+  TenantUserQuery,
 } from "./platform-type";
 
 /** The platform console's pure helpers: plain data in, plain data out. */
@@ -27,6 +28,15 @@ export function toTenantQueryParams(query: TenantPageQuery): QueryParams {
     ...pageParams(query),
     status: query.status,
     current_plan: query.currentPlan || undefined,
+  };
+}
+
+export function toTenantUserQueryParams(query: TenantUserQuery): QueryParams {
+  return {
+    page: query.page,
+    page_size: query.pageSize,
+    q: query.q || undefined,
+    role: query.role || undefined,
   };
 }
 

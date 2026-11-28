@@ -17,6 +17,8 @@ export const PLATFORM_KEYS = {
   tenantExport: "platform.tenant.export",
   /** `:delete`, and `:restore` too: undoing a deprovision is the deleting authority's call. */
   tenantDelete: "platform.tenant.delete",
+  /** Starting an impersonation, and listing the users one could start as. */
+  tenantImpersonate: "platform.tenant.impersonate",
   planView: "platform.plan.view",
   planCreate: "platform.plan.create",
   planUpdate: "platform.plan.update",

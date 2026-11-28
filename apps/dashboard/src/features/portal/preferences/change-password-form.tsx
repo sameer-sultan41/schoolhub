@@ -19,7 +19,9 @@ import {
   Input,
 } from "@schoolhub/ui";
 
+import { ImpersonationForbiddenNotice } from "@/components/impersonation-forbidden-notice";
 import { useFormDialogSubmit } from "@/hooks/use-form-dialog-submit";
+import { useIsImpersonating } from "@/hooks/use-is-impersonating";
 import { Services } from "@/services";
 import { PASSWORD_MIN_LENGTH } from "@/services/modules/auth/auth-constant";
 import {
@@ -43,6 +45,11 @@ const FIELDS = [
 /** `/portal/settings`: the viewer changes their own password. A wrong current password or a
  * password the server finds too weak shows under the field it names. */
 export function ChangePasswordForm() {
+  // Refused 403 `impersonation_forbidden` under impersonation (ADR-0037): say so, offer nothing.
+  return useIsImpersonating() ? <ImpersonationForbiddenNotice /> : <ChangePasswordFields />;
+}
+
+function ChangePasswordFields() {
   const t = useTranslations("portal.preferences.password");
   const schema = useMemo(
     () =>

@@ -6,13 +6,16 @@ import {
   authProxyClient,
   clearSessionCookie,
   endImpersonatedSession,
+  isImpersonating,
   mfaChallengeStore,
   setSessionCookie,
+  startImpersonatedSession,
 } from "@/lib/auth";
 import { endpoints } from "@/services/endpoints";
 import type {
   AuthenticatedUser,
   ChangePasswordInput,
+  ImpersonationExchange,
   InvitationAccept,
   InvitationLink,
   InvitationPreview,
@@ -128,6 +131,12 @@ export async function confirmMfa(code: string): Promise<MfaConfirmResponse> {
 }
 
 export async function logout(): Promise<void> {
+  // An impersonated session releases its grant and never touches this browser's refresh cookie,
+  // which is not its own (ADR-0037).
+  if (isImpersonating()) {
+    await endImpersonation();
+    return;
+  }
   try {
     await authProxyClient.post(endpoints.auth.logout, undefined, {
       credentials: "include",
@@ -224,17 +233,37 @@ export async function confirmPasswordReset(body: PasswordResetConfirm): Promise<
   await apiClient.post(endpoints.auth.passwordResetConfirm, body, LINK_REQUEST);
 }
 
-/** RED stub (Task 11): replaced by the implementation. */
+/**
+ * The impersonation handoff (ADR-0037): spends the console's single-use code for an access token of
+ * the user, with no refresh token, and makes it this tab's session. Anything the tab held before is
+ * dropped first, so a refused code leaves no session at all rather than the previous one. Straight
+ * to the API, anonymous, and never a refresh: a 400 `invalid_link` is an unusable code.
+ */
 export async function exchangeImpersonationCode(code: string): Promise<void> {
-  await apiClient.post(endpoints.auth.impersonationExchange, { code }, LINK_REQUEST);
+  accessTokenStore.clear();
+  const { data } = await apiClient.post<ImpersonationExchange>(
+    endpoints.auth.impersonationExchange,
+    { code },
+    LINK_REQUEST,
+  );
+  startImpersonatedSession(data.access, data.expires_in);
 }
 
-/** RED stub (Task 11): replaced by the implementation. */
+/**
+ * Ends this tab's impersonated session: releases its grant (`:end`), then forgets it here. A grant
+ * that already ended answers 401 or 404, which ends the same way; only a non-API failure rethrows.
+ */
 export async function endImpersonation(): Promise<void> {
-  await Promise.resolve();
+  try {
+    await apiClient.post(endpoints.auth.impersonationEnd, undefined, { skipAuthRefresh: true });
+  } catch (error) {
+    if (!(error instanceof ApiError)) throw error;
+  } finally {
+    endImpersonatedSession();
+  }
 }
 
-/** RED stub (Task 11): replaced by the implementation. */
+/** Forgets this tab's impersonated session without a request: the API already said it ended. */
 export function forgetImpersonation(): void {
   endImpersonatedSession();
 }

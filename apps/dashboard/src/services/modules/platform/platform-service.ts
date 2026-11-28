@@ -1,7 +1,12 @@
 import { fetchPage, MAX_PAGE_SIZE, type Page } from "@schoolhub/api-client";
 import { apiClient } from "@/lib/auth";
 import { endpoints } from "@/services/endpoints";
-import { toPageParams, toPlanQueryParams, toTenantQueryParams } from "./platform-helper";
+import {
+  toPageParams,
+  toPlanQueryParams,
+  toTenantQueryParams,
+  toTenantUserQueryParams,
+} from "./platform-helper";
 import type {
   ActivateSubscriptionInput,
   ChangePlanInput,
@@ -132,22 +137,29 @@ export async function refreshTenantUsage(id: string): Promise<TenantUsage> {
 
 // --- Impersonation (ADR-0037) ---------------------------------------------------------------
 
-/** RED stub (Task 11): replaced by the implementation. */
+/** The school's active, non-platform users the console may impersonate (page-numbered). */
 export async function fetchTenantUsers(
   tenantId: string,
   query: TenantUserQuery,
 ): Promise<Page<TenantUser>> {
   return fetchPage<TenantUser>(apiClient, endpoints.platform.tenantUsers(tenantId), {
-    query: { search: query.q },
+    query: toTenantUserQueryParams(query),
   });
 }
 
-/** RED stub (Task 11): replaced by the implementation. */
+/**
+ * Starts acting as one of the school's users: the grant, its end and the single-use handoff link.
+ * No `Idempotency-Key`, deliberately: the server would store the answer, code and all, to replay
+ * it. A retry starts a new grant, which releases the first (ADR-0037).
+ */
 export async function impersonateUser(
   tenantId: string,
   input: ImpersonateInput,
 ): Promise<GrantStarted> {
-  const { data } = await apiClient.post<GrantStarted>(endpoints.platform.tenant(tenantId), input);
+  const { data } = await apiClient.post<GrantStarted>(
+    endpoints.platform.tenantAction(tenantId, "impersonate"),
+    input,
+  );
   return data;
 }
 

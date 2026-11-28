@@ -127,7 +127,9 @@ describe("ImpersonateUserAction", () => {
     expect(
       await screen.findByRole("option", { name: "Ayesha Khan (ayesha@cityschool.test)" }),
     ).toBeInTheDocument();
-    expect(screen.queryByRole("option", { name: /Bilal Ahmed/ })).not.toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.queryByRole("option", { name: /Bilal Ahmed/ })).not.toBeInTheDocument();
+    });
   });
 
   it("starts a session with the user, reason and duration, then links to the school's dashboard", async () => {
