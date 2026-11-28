@@ -176,8 +176,9 @@ class MeSerializer(UserSerializer):
 
     impersonation = serializers.SerializerMethodField()
 
-    class Meta(UserSerializer.Meta):
-        fields = (*UserSerializer.Meta.fields, "impersonation")
+    class Meta:
+        model = User
+        fields: tuple[str, ...] = (*UserSerializer.Meta.fields, "impersonation")
         read_only_fields = fields
 
     @extend_schema_field(ImpersonationSummarySerializer(allow_null=True))
