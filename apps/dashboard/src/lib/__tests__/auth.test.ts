@@ -196,7 +196,32 @@ describe("auth", () => {
 
       expect(handler).toHaveBeenCalledWith(ended, { impersonated: true });
       expect(accessTokenStore.get()).toBeNull();
+      // A 401 still in flight after the first must not refresh either.
+      expect(isImpersonating()).toBe(true);
+      await expect(mockClientConfigs[0]?.refreshAccessToken?.()).resolves.toBeNull();
+      expect(mockRefreshAccessToken).not.toHaveBeenCalled();
+    });
+
+    it("a normal session started in a tab that held an impersonation refreshes again", async () => {
+      const {
+        accessTokenStore,
+        endImpersonatedSession,
+        forgetImpersonatedTab,
+        isImpersonating,
+        startImpersonatedSession,
+      } = await import("../auth");
+      const { impersonationToken, schoolToken } = await importFixtures();
+      startImpersonatedSession(impersonationToken(), 1800);
+      endImpersonatedSession();
+
+      // A normal token in memory is read for what it is, whatever the tab held before.
+      accessTokenStore.set(schoolToken(), 900);
       expect(isImpersonating()).toBe(false);
+      accessTokenStore.clear();
+      forgetImpersonatedTab();
+      mockRefreshAccessToken.mockResolvedValueOnce({ accessToken: "at-9", expiresIn: 900 });
+
+      await expect(mockClientConfigs[0]?.refreshAccessToken?.()).resolves.toBe("at-9");
     });
 
     it("a normal session's 401 is not an impersonation", async () => {

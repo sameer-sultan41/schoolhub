@@ -26,6 +26,8 @@ jest.mock("next-themes", () => ({
 }));
 
 jest.mock("@/lib/auth", () => ({ logout: jest.fn() }));
+// `useSignOut` asks whether the session is an impersonation; this test's sessions never are.
+jest.mock("@/hooks/use-is-impersonating", () => ({ useIsImpersonating: () => false }));
 
 jest.mock("@/services", () => ({
   Services: { auth: { fetchCurrentUser: jest.fn(), logout: jest.fn() } },

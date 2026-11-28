@@ -418,8 +418,7 @@ describe("AuthService", () => {
 
     it("ending releases the grant and drops the session, even when the grant already ended", async () => {
       const { endImpersonation } = await import("../auth-service");
-      const { accessTokenStore, isImpersonating, startImpersonatedSession } =
-        await import("@/lib/auth");
+      const { accessTokenStore, startImpersonatedSession } = await import("@/lib/auth");
       const { impersonationToken } = await import("@/test-fixtures/impersonation");
       const { ApiError } = await importApiClient();
       startImpersonatedSession(impersonationToken(), 1800);
@@ -435,7 +434,6 @@ describe("AuthService", () => {
         expect.objectContaining({ skipAuthRefresh: true }),
       );
       expect(accessTokenStore.get()).toBeNull();
-      expect(isImpersonating()).toBe(false);
       expect(document.cookie).not.toContain("sh_session=1");
     });
 
@@ -454,6 +452,37 @@ describe("AuthService", () => {
         undefined,
         expect.objectContaining({ skipAuthRefresh: true }),
       );
+    });
+  });
+
+  describe("a normal sign-in in a tab that held an impersonation", () => {
+    afterEach(() => {
+      window.sessionStorage.clear();
+    });
+
+    it("is a normal session again: sign-out revokes it through /logout", async () => {
+      const { login, logout } = await import("../auth-service");
+      const { isImpersonating, startImpersonatedSession, endImpersonatedSession } =
+        await import("@/lib/auth");
+      const { impersonationToken, schoolToken } = await import("@/test-fixtures/impersonation");
+      startImpersonatedSession(impersonationToken(), 1800);
+      endImpersonatedSession();
+      mockPost.mockResolvedValueOnce({
+        data: { access_token: schoolToken(), expires_in: 900, user: { id: "u1" } },
+      });
+      await login({ identifier: "admin", password: "secret" });
+      expect(isImpersonating()).toBe(false);
+
+      mockPost.mockResolvedValueOnce({ data: undefined });
+      await logout();
+
+      expect(mockPost).toHaveBeenLastCalledWith(
+        "/logout",
+        undefined,
+        expect.objectContaining({ credentials: "include" }),
+      );
+      // Gone with the token, the tab is no longer read as an impersonation either.
+      expect(isImpersonating()).toBe(false);
     });
   });
 });

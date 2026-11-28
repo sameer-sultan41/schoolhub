@@ -72,6 +72,12 @@ export function impersonationModule(options: ImpersonationModuleOptions): MockMo
         });
       }
       if (action === "end") {
+        // Like the real route: anonymous is 401, a session that is not this impersonation 404.
+        const authorization = request.headers["authorization"];
+        if (!authorization) {
+          return fail(401, "Authentication credentials were not provided.");
+        }
+        if (authorization !== `Bearer ${IMPERSONATION_TOKEN}`) return fail(404, "Not found.");
         if (ended) {
           return fail(401, "This support session has ended.", { code: "impersonation_ended" });
         }

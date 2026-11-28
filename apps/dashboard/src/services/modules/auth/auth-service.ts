@@ -6,6 +6,7 @@ import {
   authProxyClient,
   clearSessionCookie,
   endImpersonatedSession,
+  forgetImpersonatedTab,
   isImpersonating,
   mfaChallengeStore,
   setSessionCookie,
@@ -53,6 +54,7 @@ export type {
 
 /** A completed sign-in's token and the proxy's session marker. */
 function startSession(data: { access_token: string; expires_in: number }): void {
+  forgetImpersonatedTab();
   accessTokenStore.set(data.access_token, data.expires_in);
   setSessionCookie();
 }
@@ -235,9 +237,10 @@ export async function confirmPasswordReset(body: PasswordResetConfirm): Promise<
 
 /**
  * The impersonation handoff (ADR-0037): spends the console's single-use code for an access token of
- * the user, with no refresh token, and makes it this tab's session. Anything the tab held before is
- * dropped first, so a refused code leaves no session at all rather than the previous one. Straight
- * to the API, anonymous, and never a refresh: a 400 `invalid_link` is an unusable code.
+ * the user, with no refresh token, and makes it this tab's session. The tab's in-memory token is
+ * dropped first, so the exchange is anonymous and a refused code leaves no token behind; the host's
+ * own cookie session is not touched. Straight to the API, never a refresh: a 400 `invalid_link` is
+ * an unusable code.
  */
 export async function exchangeImpersonationCode(code: string): Promise<void> {
   accessTokenStore.clear();
