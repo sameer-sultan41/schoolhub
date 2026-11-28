@@ -161,10 +161,30 @@ Indexes: unique(provider, event_id).
 | students | integer | no | — | Students not withdrawn, graduated, transferred or soft-deleted |
 | staff | integer | no | — | Staff not resigned, retired, terminated or soft-deleted |
 | storage_bytes | bigint | no | — | Sum of the school's non-deleted `files.size_bytes` |
-| impersonations_30d | integer | yes | — | Filled by impersonation (PR E); null until then |
+| impersonations_30d | integer | yes | — | Impersonation grants taken for the school in the 30 days before the snapshot; null on rows taken before PR E |
 | modules_enabled | jsonb | no | [] | The `module.*` keys on for the school |
 
 Indexes: (tenant_id, taken_at DESC). Retention is not built yet (deferred-work.md).
+
+### impersonation_grants
+**Platform scope — no RLS.** One operator's time-boxed permission to act as one school user (platform-admin §7.3, [ADR-0037](../../decisions/0037-impersonation-grants.md)). Read on every impersonated request, before any school is bound. Mutable: it is released, and its handoff code spent.
+
+| Column | Type | Null | Default | Notes |
+| ------ | ---- | ---- | ------- | ----- |
+| id | uuid | no | — | PK; the token's `grant_id` claim |
+| tenant_id | uuid | no | — | FK → tenants (`PROTECT`) |
+| target_user_id | uuid | no | — | FK → users: the school user acted as |
+| granted_to_id | uuid | no | — | FK → users: the platform operator holding it |
+| reason | text | no | — | Required |
+| expires_at | timestamptz | no | — | 1 to `PLATFORM_IMPERSONATION_MAX_MINUTES` after creation |
+| released_at | timestamptz | yes | — | Set when it ends; `expires_at` for an expiry |
+| end_reason | varchar(20) | no | '' | Enum: `released` `revoked` `superseded` `expired` |
+| handoff_code_hash | char(64) | no | — | SHA-256 of the one-time handoff code; unique |
+| handoff_expires_at | timestamptz | no | — | `PLATFORM_HANDOFF_CODE_TTL_SECONDS` after creation, never after `expires_at` |
+| handoff_used_at | timestamptz | yes | — | Set by the one exchange that spends the code |
+| created_at, updated_at, created_by, updated_by, deleted_at | | | | The standard audit columns |
+
+Indexes: (tenant_id, created_at DESC); (expires_at) where `released_at IS NULL`; unique(granted_to_id, target_user_id) where `released_at IS NULL` (one open grant per holder and person).
 
 ### custom_domains
 A tenant's custom domain(s) for its public website (multi-tenancy §4; bound via website-cms).

@@ -20,7 +20,7 @@
 - JWT access (15 min) + rotating refresh (30 days); refresh reuse revokes the whole token family (theft detection).
 - Login rate limiting per account and per IP; lockout with exponential backoff; secure one-time-token reset.
 - Machine access (website renderer → API) uses scoped, read-only tokens ([`api-architecture.md`](../02-architecture/api-architecture.md) §2.2) — never shared human credentials.
-- Impersonation by platform support only via audited, time-boxed elevation grants with visible banner.
+- Impersonation by platform support only via audited, time-boxed elevation grants with visible banner. *As built ([ADR-0037](../decisions/0037-impersonation-grants.md)):* a hashed, single-use, two-minute handoff code becomes an access-only token (`act`, `grant_id`, `amr=["impersonation"]`, no refresh); the grant and its holder are re-checked on every request (401 `impersonation_ended`); password and MFA changes are refused under it; every grant, exchange, release, revocation and expiry is a security event.
 
 ## SEC-02 Role-Based Access Control
 

@@ -256,6 +256,18 @@ either this file or `project-status.md`.
     reads plan limits only, not a school's `limits_override` (under its RLS boundary). Churn
     is dated from `deprovision_after - PLATFORM_RETENTION_DAYS`, so a changed retention
     setting shifts past months. Scheduled report delivery (§13) is not built.
+  - **Impersonation, what PR E's API leaves out** (platform-admin §7.3,
+    [ADR-0037](decisions/0037-impersonation-grants.md)):
+    - **No tenant-visible impersonation log** (§7.3 and §19, a recommendation). Owners get the
+      in-app `platform.impersonation` notice when a grant starts and ends; a screen listing a
+      school's grants, readable by its owner, needs a tenant route and key.
+    - **No platform-ops copy** of the notice: `notify()` is per tenant (the platform-ops
+      channel above).
+    - **Expiry is recorded within five minutes, not to the second.** The authenticator refuses
+      an expired grant's token at once; the sweep only writes the `expired` end, its event and
+      the owners' notice.
+    - **No limit on how many grants an operator holds at once** across different users, and no
+      alert on `platform.impersonation.*` events (SEC-19 lists impersonation grants).
 
 - **AI gateway and AI-FEE-02 follow-ups** (`feat/ai-gateway`, plan
   `docs/superpowers/plans/2026-11-07-ai-gateway.md`, [ADR-0035](decisions/0035-ai-gateway-shape.md)).
